@@ -39,7 +39,7 @@ jobs:
       env:
         MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}  # 将你的密钥存为 GitHub Secret
       run: |
-        python textbook_difficulty_system.py \
+        python Create textbook_difficulty_system.py \
           --cognitive_load cognitive_load.json \
           --scores scores.json \
           --textbook textbook.json \
