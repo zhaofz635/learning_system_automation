@@ -1,50 +1,95 @@
-name: Run Textbook Analysis
+name: Textbook Analysis Pipeline
 
 on:
-  # 允许通过 API 手动触发
   workflow_dispatch:
     inputs:
       student_id:
-        description: 'Student ID'
+        description: '学生ID (如 test001)'
         required: true
+        type: string
       score:
-        description: 'Score'
+        description: '测试成绩 (0-5分)'
         required: true
+        type: string
       cognitive_load:
-        description: 'Cognitive Load (comma separated)'
+        description: '认知负荷评分 (1-5分，逗号分隔)'
         required: true
+        type: string
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
     steps:
-    - uses: actions/checkout@v3
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pandas numpy joblib nltk scikit-learn requests
-
-    - name: Create scores.json and cognitive_load.json from inputs
-      run: |
-        echo "[{\"student_id\": ${{ inputs.student_id }}, \"score\": ${{ inputs.score }}}]" > scores.json
-        echo "[{\"student_id\": ${{ inputs.student_id }}, \"responses\": [${{ inputs.cognitive_load }}]}]" > cognitive_load.json
-
-    - name: Run Python Script
-      env:
-        MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}  # 将你的密钥存为 GitHub Secret
-      run: |
-        python textbook_difficulty_system.py \
-          --cognitive_load cognitive_load.json \
-          --scores scores.json \
-          --textbook textbook.json \
-          --output results.json
-
-    # 后续步骤：将 results.json 的内容写回 Google Sheets
-    # 这需要使用 Google Sheets API，比较复杂，此处省略
-    # 你可以手动运行 "ImportJSON" 脚本来完成这一步
+      # 1. 检出代码
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 需要完整历史记录以便后续git push
+      
+      # 2. 设置Python环境
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      # 3. 安装依赖
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests nltk
+          python -c "import nltk; nltk.download('punkt')"
+      
+      # 4. 准备输入数据（兼容您的脚本格式）
+      - name: Prepare input files
+        run: |
+          # 创建符合textbook_difficulty_system.py要求的JSON格式
+          echo '{
+            "student_id": "${{ inputs.student_id }}",
+            "score": ${{ inputs.score }},
+            "cognitive_load": [${{ inputs.cognitive_load }}]
+          }' > input_data.json
+          
+          # 验证生成的文件
+          cat input_data.json
+          jq '.' input_data.json  # 需要安装jq的话可以添加：sudo apt-get install jq
+      
+      # 5. 运行分析脚本
+      - name: Run analysis script
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+        run: |
+          python textbook_difficulty_system.py \
+            --cognitive_load input_data.json \
+            --scores input_data.json \
+            --textbook textbook.json \
+            --output results.json
+          
+          # 验证结果文件
+          cat results.json
+      
+      # 6. 自动提交结果到GitHub仓库
+      - name: Commit results
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add results.json
+          git commit -m "Auto-update: Analysis results for ${{ inputs.student_id }}"
+          git push
+      
+      # 7. 上传结果到Google Drive（通过Google Apps Script）
+      - name: Upload to Google Drive
+        env:
+          GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}  # 存储Google Apps Script的Web App URL
+        run: |
+          # 使用curl将results.json发送到Google Apps Script
+          curl -X POST "$GAS_SCRIPT_URL" \
+            -H "Content-Type: application/json" \
+            --data-binary @results.json
+      
+      # 8. 可选：发送通知
+      - name: Notify completion
+        if: always()
+        run: |
+          echo "Analysis completed for student ${{ inputs.student_id }}"
+          echo "View results: https://github.com/zhaofz635/learning_system_automation/blob/main/results.json"
