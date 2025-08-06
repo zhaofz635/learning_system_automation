@@ -1,95 +1,91 @@
-name: Textbook Analysis Pipeline
+import { axios } from "@pipedream/platform"
 
-on:
-  workflow_dispatch:
-    inputs:
-      student_id:
-        description: '学生ID (如 test001)'
-        required: true
-        type: string
-      score:
-        description: '测试成绩 (0-5分)'
-        required: true
-        type: string
-      cognitive_load:
-        description: '认知负荷评分 (1-5分，逗号分隔)'
-        required: true
-        type: string
+export default defineComponent({
+  props: {
+    github: {
+      type: "app",
+      app: "github",
+    },
+  },
+  async run({ steps, $ }) {
+    // 1. 定义常量
+    const REPO_OWNER = "zhaofz635";
+    const REPO_NAME = "learning_system_automation";
+    const WORKFLOW_FILE = "run-analysis.yml"; // 精确匹配您的YAML文件名
+    const BRANCH = "main";
 
-jobs:
-  analyze:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    // 2. 验证输入数据
+    const requiredParams = ['student_id', 'score', 'cognitive_load'];
+    const missingParams = requiredParams.filter(param => !steps.trigger.event.body?.[param]);
     
-    steps:
-      # 1. 检出代码
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # 需要完整历史记录以便后续git push
-      
-      # 2. 设置Python环境
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-      
-      # 3. 安装依赖
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pandas numpy requests nltk
-          python -c "import nltk; nltk.download('punkt')"
-      
-      # 4. 准备输入数据（兼容您的脚本格式）
-      - name: Prepare input files
-        run: |
-          # 创建符合textbook_difficulty_system.py要求的JSON格式
-          echo '{
-            "student_id": "${{ inputs.student_id }}",
-            "score": ${{ inputs.score }},
-            "cognitive_load": [${{ inputs.cognitive_load }}]
-          }' > input_data.json
-          
-          # 验证生成的文件
-          cat input_data.json
-          jq '.' input_data.json  # 需要安装jq的话可以添加：sudo apt-get install jq
-      
-      # 5. 运行分析脚本
-      - name: Run analysis script
-        env:
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
-        run: |
-          python textbook_difficulty_system.py \
-            --cognitive_load input_data.json \
-            --scores input_data.json \
-            --textbook textbook.json \
-            --output results.json
-          
-          # 验证结果文件
-          cat results.json
-      
-      # 6. 自动提交结果到GitHub仓库
-      - name: Commit results
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add results.json
-          git commit -m "Auto-update: Analysis results for ${{ inputs.student_id }}"
-          git push
-      
-      # 7. 上传结果到Google Drive（通过Google Apps Script）
-      - name: Upload to Google Drive
-        env:
-          GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}  # 存储Google Apps Script的Web App URL
-        run: |
-          # 使用curl将results.json发送到Google Apps Script
-          curl -X POST "$GAS_SCRIPT_URL" \
-            -H "Content-Type: application/json" \
-            --data-binary @results.json
-      
-      # 8. 可选：发送通知
-      - name: Notify completion
-        if: always()
-        run: |
-          echo "Analysis completed for student ${{ inputs.student_id }}"
-          echo "View results: https://github.com/zhaofz635/learning_system_automation/blob/main/results.json"
+    if (missingParams.length > 0) {
+      throw new Error(`缺少必要参数: ${missingParams.join(', ')}`);
+    }
+
+    // 3. 准备输入数据
+    const inputs = {
+      student_id: steps.trigger.event.body.student_id.toString(),
+      score: parseFloat(steps.trigger.event.body.score).toFixed(1),
+      cognitive_load: Array.isArray(steps.trigger.event.body.cognitive_load) 
+        ? steps.trigger.event.body.cognitive_load.join(",") 
+        : steps.trigger.event.body.cognitive_load.toString()
+    };
+
+    // 4. 构建API URL
+    const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/${WORKFLOW_FILE}/dispatches`;
+
+    try {
+      // 5. 触发工作流
+      const response = await axios($, {
+        method: "POST",
+        url: apiUrl,
+        headers: {
+          Authorization: `Bearer ${this.github.$auth.oauth_access_token}`,
+          Accept: "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
+          "X-GitHub-Api-Version": "2022-11-28" // 明确指定API版本
+        },
+        data: {
+          ref: BRANCH,
+          inputs: inputs
+        }
+      });
+
+      // 6. 返回成功响应
+      return {
+        success: true,
+        message: "工作流触发成功",
+        details: {
+          workflow: WORKFLOW_FILE,
+          repository: `${REPO_OWNER}/${REPO_NAME}`,
+          branch: BRANCH,
+          inputs: inputs,
+          status_code: response.status
+        }
+      };
+    } catch (error) {
+      // 7. 增强的错误处理
+      console.error("完整错误详情:", {
+        request_config: error.config,
+        response_status: error.response?.status,
+        response_data: error.response?.data,
+        workflow_file: WORKFLOW_FILE
+      });
+
+      // 8. 检查工作流是否存在
+      if (error.response?.status === 404) {
+        const workflowsRes = await axios($, {
+          method: "GET",
+          url: `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows`,
+          headers: {
+            Authorization: `Bearer ${this.github.$auth.oauth_access_token}`
+          }
+        });
+        const availableWorkflows = workflowsRes.data.workflows.map(w => w.name);
+        throw new Error(`工作流未找到。可用工作流: ${availableWorkflows.join(', ')}`);
+      }
+
+      throw new Error(`触发失败: ${error.response?.data?.message || error.message}`);
+    }
+  },
+})
