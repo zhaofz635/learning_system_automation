@@ -522,7 +522,7 @@ if __name__ == "__main__":
     parser.add_argument('--scaler', type=str, default='scaler.pkl', help="标准化器路径")
     parser.add_argument('--weights', type=str, default='weights_xgb.pkl', help="权重文件路径")
     parser.add_argument('--term_bank', type=str, default='academic_terms.txt', help="术语库文件路径")
-    parser.add_argument('eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJ6aGFvemhlbmciLCJVc2VyTmFtZSI6InpoYW96aGVuZyIsIkFjY291bnQiOiIiLCJTdWJqZWN0SUQiOiIxOTUyNjM0ODc2MTE3MTMxNzExIiwiUGhvbmUiOiIxMzI1MjY0OTYyMiIsIkdyb3VwSUQiOiIxOTUyNjM0ODc2MTEyOTM3NDA3IiwiUGFnZU5hbWUiOiIiLCJNYWlsIjoiIiwiQ3JlYXRlVGltZSI6IjIwMjUtMDgtMDYgMTE6NDY6NTMiLCJUb2tlblR5cGUiOjEsImlzcyI6Im1pbmltYXgifQ.h9SkryGz41G1sSx0bJdG849Mhe9bKcMNdJ4RUIacn2u_xxm0RcdMSFhHbso43vf2fLMHIEkSBFqFyskDevD9a4yBl4OpI6Z6UJMblvj4S4Yr0TnzDYojqLv05hCIOJejZ2tZivmskwRkTuUDzGGehcCuPG11HzMjroYB2cufpBbPMVJFawNCnl0tPlpreuBdXoVhjjzqqhN0ryEYMNqOfa5oKmiNTuFEx-D7PxHcWxW--6H_zrzKnkj2Js5lY3DPfZWr1sVDpix4IsRLcOt1hDPK12IdLrfL7mAZr4WLMuJ4D5Ukzt_GVlIsRB8mVefInRzYlNQT1OxZZHKNDEUyrg', type=str, required=True, help="MiniMax API 密钥")
+    parser.add_argument('--minimax_api_key', type=str, required=True, help="MiniMax API 密钥")
     args = parser.parse_args()
 
     system = TextbookDifficultySystem(
