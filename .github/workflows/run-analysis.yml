@@ -57,7 +57,7 @@ jobs:
       # 5. 运行分析脚本
       - name: Run analysis script
         env:
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          Access_Key_Secret: ${{ secrets.Access_Key_Secret }}
         run: |
           python textbook_difficulty_system.py \
             --cognitive_load input_data.json \
