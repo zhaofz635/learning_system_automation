@@ -1,0 +1,50 @@
+[
+    {
+        "text": "1. Large Language Models: Challenges\n1.1 Overview: Large Language Models (LLMs) advance text generation and translation.\n1.1.1 Models: BERT and GPT-4 use Transformer architectures.\n1.1.2 Mechanisms: Attention mechanisms process sequences efficiently.\n1.2 Complexity: Training complexity is $C(n, d) = O(n^2 d)$.\n1.2.1 Parameters: Here, $n$ is sequence length, $d$ is dimension.\n1.3 Scope: This covers technical, ethical, and application challenges.",
+        "image_path": ""
+    },
+    {
+        "text": "2. Technical Challenges\n2.1 Architecture: Transformers power GPT-3 with attention mechanisms. Matrices: $Q$ and $K$ are query and key matrices.\n2.2 Scalability: Complexity $O(n^2 d_k)$ limits long sequences.\n2.2.1 Components: Encoders process inputs, decoders generate outputs.\n2.3 Diagram: It shows encoder-decoder with attention layers.",
+        "image_path": ""
+    },
+    {
+        "text": "3. Resource Demands\n3.1 Requirements: GPT-3 needs 175 billion parameters.\n3.1.1 Memory: Footprint is $M = 4 \\times 175 \\times 10^9 \\approx 700 \\text{ GB}$.\n3.2 Impact: Training uses ~3000 GPUs, 1.9 million kWh.\n3.2.1 Emissions: It emits 552 tons of CO2e.\n3.3 Optimization: High costs require efficient techniques.\n3.4 Figure: Figure 1 summarizes GPT-3’s resource use.",
+        "image_path": ""
+    },
+    {
+        "text": "4. Interpretability\n4.1 Issue: GPT-3’s decisions lack clear reasoning.\n4.1.1 Example: Medical advice is opaque in healthcare.\n4.2 Analysis: Interpretability uses $I = \\frac{1}{n} \\sum_{i=1}^n \\text{Var}(\\alpha_i)$.\n4.2.1 Weights: $\\alpha_i$ are attention weights.\n4.3 Comparison: Table 1 shows GPT-3 (Score: 2), BERT (Score: 4).\n4.3.1 Insight: Smaller models are more interpretable.",
+        "image_path": ""
+    },
+    {
+        "text": "5. Privacy\n5.1 Risk: GPT-2 risks leaking sensitive data.\n5.1.1 Study: A 2021 study showed leakage via prompts.\n5.2 Probability: Leakage is $P(\\text{leak}) = 1 - \\exp\\left(-\\frac{N_p}{N_d}\\right)$.\n5.2.1 Terms: $N_p$ is prompts, $N_d$ is dataset size.\n5.3 Mitigation: Data sanitization and privacy techniques are vital.",
+        "image_path": ""
+    },
+    {
+        "text": "6. Bias\n6.1 Issue: GPT-3 embeds biases, linking 'doctor' to males.\n6.1.1 Source: Biases come from internet training data.\n6.2 Measure: Bias is $B = \\frac{1}{N} \\sum_{i=1}^N \\mathbb{I}(\\text{pred}_i \\neq \\text{true}_i)$.\n6.2.1 Indicator: $\\mathbb{I}$ flags biased predictions.\n6.3 Example: GPT-3 stereotypes engineers as 'white males.'\n6.4 Illustration: Cartoon shows GPT-3’s biased engineer depiction.",
+        "image_path": ""
+    },
+    {
+        "text": "7. Adaptability\n7.1 Challenge: LLMs lack domain-specific knowledge.\n7.1.1 Domain: Medicine requires specialized data.\n7.2 Error: Fine-tuning error is $E = \\frac{1}{N} \\sum_{i=1}^N (y_i - \\hat{y}_i)^2$.\n7.2.1 Outputs: $y_i$ and $\\hat{y}_i$ are true, predicted values.\n7.3 Solution: Fine-tuning improves accuracy but raises costs.",
+        "image_path": ""
+    },
+    {
+        "text": "8. Performance\n8.1 Latency: GPT-3’s latency is $T = k \\cdot n \\cdot d$, 2.5 s/sentence.\n8.1.1 Limit: This hinders real-time applications.\n8.2 Comparison: Table 2 shows DistilBERT (0.3s), GPT-3 (2.5s).\n8.2.1 Accuracy: Smaller models sacrifice accuracy for speed.\n8.3 Need: Faster inference is key for real-time tasks.",
+        "image_path": ""
+    },
+    {
+        "text": "9. Compression\n9.1 Method: Distillation cuts GPT-3 to 17.5 billion parameters.\n9.1.1 Savings: Memory is $M_{\\text{opt}} = \\frac{M_{\\text{orig}}}{4}$.\n9.2 Quantization: Weights shrink from 4 bytes to 1 byte.\n9.2.1 Benefit: Enables deployment on limited devices.\n9.3 Impact: These enhance LLM efficiency.",
+        "image_path": ""
+    },
+    {
+        "text": "10. Multimodal\n10.1 Capability: DALL·E combines text, images: $P = \\alpha P_{\\text{text}} + (1-\\alpha) P_{\\text{image}}$.\n10.1.1 Model: It supports diverse inputs.\n10.2 Use: Applications include education and healthcare.\n10.2.1 Benefit: Multimodal improves task versatility.\n10.3 Future: Expands LLM potential.",
+        "image_path": ""
+    },
+    {
+        "text": "11. Regulation\n11.1 Policy: EU’s AI Act audits bias, privacy risks.\n11.1.1 Goal: Ensures ethical AI deployment.\n11.2 Aim: Regulations promote fairness in AI.\n11.2.1 Focus: Accountability is critical.\n11.3 Outlook: Oversight strengthens trust in AI.",
+        "image_path": ""
+    },
+    {
+        "text": "12. Summary\n12.1 Challenges: LLMs face technical, ethical, application issues.\n12.1.1 Scope: Includes resources, bias, latency.\n12.2 Complexity: Total is $C_{\\text{total}} = w_1 C_{\\text{tech}} + w_2 C_{\\text{eth}} + w_3 C_{\\text{app}}$.\n12.2.1 Weights: $w_i$ balance challenge types.\n12.3 Future: Optimization, multimodal, regulation improve LLMs.",
+        "image_path": ""
+    }
+]
