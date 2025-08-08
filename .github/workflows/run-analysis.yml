@@ -20,8 +20,6 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      NLTK_DATA: /tmp/nltk_data  # NLTK 数据根目录
 
     steps:
       # 1. 检出代码
@@ -35,38 +33,40 @@ jobs:
         with:
           python-version: '3.9'
 
-      # 3. 安装依赖并下载 NLTK 数据（推荐方式）
-      - name: Install dependencies and NLTK data
+      # 3. 配置 NLTK 环境变量（关键：早于所有 Python 步骤）
+      - name: Configure NLTK_DATA environment
         run: |
-          # 升级 pip 并安装依赖
+          echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
+          mkdir -p /tmp/nltk_data
+        # 注意：env 不在此处设置，而是通过 GITHUB_ENV 注入后续步骤
+
+      # 4. 安装依赖并下载 NLTK 数据
+      - name: Install dependencies and download NLTK data
+        run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install nltk
 
-          # 创建 NLTK 数据目录
-          mkdir -p /tmp/nltk_data
-
-          # 🔑 核心：使用 NLTK 官方推荐的 'book' 集合
-          # 包含：punkt, punkt_tab, stopwords, wordnet, averaged_perceptron_tagger 等
+          # 下载 book 集合（包含 punkt, punkt_tab 等）
           python -c "
           import nltk
-          print('📥 Downloading NLTK book collection (official recommended)...')
+          print('📥 Downloading NLTK book collection...')
           nltk.download('book', download_dir='/tmp/nltk_data', quiet=False)
-          print('✅ NLTK data installed.')
+          print('✅ NLTK data downloaded to /tmp/nltk_data')
           "
 
-          # ✅ 将自定义路径添加到 nltk 搜索路径（关键！）
+      # 5. 验证 tokenization 是否可用（无需手动添加路径）
+      - name: Validate NLTK setup
+        run: |
           python -c "
           import nltk
-          nltk.data.path.append('/tmp/nltk_data')  # 确保能加载 punkt_tab
-          tokens = nltk.word_tokenize('Hello, world! This is a test.')
-          print(f'✅ Tokenization works: {tokens}')
+          # ✅ 不需要 nltk.data.path.append()！
+          # NLTK 自动从 $NLTK_DATA 加载资源
+          tokens = nltk.word_tokenize('Hello, world! This is a test sentence.')
+          print(f'✅ Success: Tokenization works → {tokens}')
           "
 
-          # 设置环境变量供后续步骤使用
-          echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
-
-      # 4. 准备输入数据
+      # 6. 准备输入数据
       - name: Prepare input files
         run: |
           echo '{
@@ -76,7 +76,7 @@ jobs:
           }' > input_data.json
           cat input_data.json
 
-      # 5. 运行分析脚本
+      # 7. 运行分析脚本
       - name: Run analysis script
         env:
           Access_Key_Secret: ${{ secrets.Access_Key_Secret }}
@@ -88,7 +88,7 @@ jobs:
             --output results.json
           cat results.json
 
-      # 6. 提交结果
+      # 8. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
@@ -97,7 +97,7 @@ jobs:
           git commit -m "Auto: Results for ${{ inputs.student_id }}" || echo "No changes to commit"
           git push
 
-      # 7. 上传到 Google Drive
+      # 9. 上传到 Google Drive
       - name: Upload to Google Drive
         if: success()
         env:
@@ -107,7 +107,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @results.json
 
-      # 8. 完成通知
+      # 10. 完成通知
       - name: Notify completion
         if: always()
         run: |
