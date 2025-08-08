@@ -3,6 +3,8 @@ import numpy as np
 import json
 import joblib
 import os
+import re
+import math
 from datetime import datetime
 import requests
 import nltk
@@ -11,15 +13,56 @@ from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
 import cv2
 from skimage.feature import graycomatrix, graycoprops
-import re
-import math
 
-nltk.download('punkt', quiet=True)
-nltk.download('stopwords', quiet=True)
+# ========================================
+# 🔧 NLTK 路径与资源管理（关键修复）
+# ========================================
+
+# 定义与 GitHub Actions 一致的路径
+NLTK_DATA_PATH = '/tmp/nltk_data'
+
+def setup_nltk():
+    """确保 NLTK 能找到数据目录"""
+    # 优先使用环境变量
+    custom_path = os.getenv('NLTK_DATA')
+    if custom_path and custom_path not in nltk.data.path:
+        nltk.data.path.insert(0, custom_path)
+    
+    # 添加默认路径
+    if NLTK_DATA_PATH not in nltk.data.path:
+        nltk.data.path.insert(0, NLTK_DATA_PATH)
+    
+    # 调试输出
+    print("🔍 NLTK data search paths:", nltk.data.path)
+
+def download_nltk_resources():
+    """下载必要资源到指定目录"""
+    try:
+        nltk.data.find('tokenizers/punkt')
+        print("✅ punkt 已存在")
+    except LookupError:
+        print(f"📥 正在下载 punkt 到 {NLTK_DATA_PATH}")
+        nltk.download('punkt', download_dir=NLTK_DATA_PATH, quiet=False)
+
+    try:
+        nltk.data.find('corpora/stopwords')
+        print("✅ stopwords 已存在")
+    except LookupError:
+        print(f"📥 正在下载 stopwords 到 {NLTK_DATA_PATH}")
+        nltk.download('stopwords', download_dir=NLTK_DATA_PATH, quiet=False)
+
+# 执行初始化
+setup_nltk()
+download_nltk_resources()
+
+# ========================================
+# 📚 术语库
+# ========================================
 
 class AcademicTermBank:
     def __init__(self, path="academic_terms.txt"):
         self.terms = self.load_terms(path)
+
     def load_terms(self, path):
         try:
             with open(path, 'r', encoding='utf-8') as f:
@@ -30,15 +73,21 @@ class AcademicTermBank:
             print(f"未找到术语库文件: {path}, 使用空术语库")
             return set()
 
+# ========================================
+# 🖼️ 表格/图像复杂度分析器
+# ========================================
+
 class TableComplexityAnalyzer:
     def __init__(self, weight_structured=0.6, weight_image=0.4):
         self.weights = {'structured': weight_structured, 'image': weight_image}
         self.sub_weights = {'row_complexity': 0.4, 'method_diversity': 0.3, 'column_variety': 0.3}
         self.vectorizer = TfidfVectorizer()
         self._prepare_tfidf()
+
     def _prepare_tfidf(self):
         IMPORTANT_COLUMNS = ['metric', 'formula', 'threshold', 'method']
         self.vectorizer.fit(IMPORTANT_COLUMNS)
+
     def analyze_entry(self, entry):
         struct_score = self._calc_structured_features(entry)
         image_score = self._calc_image_features(entry.get('image_path', ''))
@@ -49,6 +98,7 @@ class TableComplexityAnalyzer:
             if len(words) > 100:
                 score = 0.5
         return score
+
     def _calc_structured_features(self, entry):
         if 'structured_data' not in entry or not entry['structured_data']:
             return 0
@@ -66,6 +116,7 @@ class TableComplexityAnalyzer:
         return (row_comp * self.sub_weights['row_complexity'] +
                 method_div * self.sub_weights['method_diversity'] +
                 col_var * self.sub_weights['column_variety'])
+
     def _calc_image_features(self, image_path):
         if not image_path or not os.path.exists(image_path):
             return 0.0
@@ -84,6 +135,10 @@ class TableComplexityAnalyzer:
         except Exception as e:
             print(f"图像处理错误: {str(e)}")
             return 0.0
+
+# ========================================
+# 📊 计算各项复杂度
+# ========================================
 
 def calculate_language_complexity(text, term_bank):
     words = word_tokenize(text)
@@ -196,12 +251,17 @@ def calculate_structure_disorder(text):
     final_score = round(max(0.1, min(structure_disorder, 1.0)), 2)
     return final_score
 
+# ========================================
+# 📥 输入模块
+# ========================================
+
 class InputModule:
     def __init__(self, cognitive_load_path, score_path, textbook_path, term_bank_path="academic_terms.txt"):
         self.term_bank = AcademicTermBank(term_bank_path)
         self.cognitive_load_data = self.load_cognitive_load(cognitive_load_path)
         self.score_data = self.load_scores(score_path)
         self.textbook_data = self.load_textbook(textbook_path)
+
     def load_cognitive_load(self, path):
         try:
             with open(path, 'r', encoding='utf-8') as f:
@@ -219,6 +279,7 @@ class InputModule:
             return df
         except Exception as e:
             raise ValueError(f"加载认知负荷数据失败: {str(e)}")
+
     def calculate_cognitive_load(self, responses):
         valid_responses = [r for r in responses if r is not None]
         if not valid_responses:
@@ -231,6 +292,7 @@ class InputModule:
             return pd.Series(['medium', normalized_score])
         else:
             return pd.Series(['low', normalized_score])
+
     def load_scores(self, path):
         try:
             with open(path, 'r', encoding='utf-8') as f:
@@ -242,6 +304,7 @@ class InputModule:
             return df
         except Exception as e:
             raise ValueError(f"加载成绩数据失败: {str(e)}")
+
     def classify_score(self, score):
         if score >= 85:
             return pd.Series(['high', score])
@@ -249,6 +312,7 @@ class InputModule:
             return pd.Series(['medium', score])
         else:
             return pd.Series(['low', score])
+
     def load_textbook(self, path):
         try:
             with open(path, 'r', encoding='utf-8') as f:
@@ -259,6 +323,10 @@ class InputModule:
         except Exception as e:
             raise ValueError(f"加载教材数据失败: {str(e)}")
 
+# ========================================
+# 🧠 评估模块
+# ========================================
+
 class EvaluationModule:
     def __init__(self, model_path='best_model_xgb.pkl', scaler_path='scaler.pkl', weights_path='weights_xgb.pkl'):
         self.model = joblib.load(model_path)
@@ -266,6 +334,7 @@ class EvaluationModule:
         self.weights_info = joblib.load(weights_path)
         self.term_bank = AcademicTermBank()
         self.table_analyzer = TableComplexityAnalyzer()
+
     def evaluate_textbook_difficulty(self, textbook_data):
         features = []
         for entry in textbook_data:
@@ -331,6 +400,10 @@ class EvaluationModule:
         overall_difficulty = features_df['difficulty_score'].mean()
         return features_df, overall_difficulty
 
+# ========================================
+# 🎯 IRT 自适应调节
+# ========================================
+
 class IRTOptimizedLearningAdaptation:
     def __init__(self):
         self.D = 1.702
@@ -339,11 +412,13 @@ class IRTOptimizedLearningAdaptation:
         self.b_original_max = 10.0
         self.b_mapped_min = 1.0
         self.b_mapped_max = 5.0
+
     def _map_difficulty_scale(self, b_original):
         b_mapped = self.b_mapped_min + \
                    (b_original - self.b_original_min) / (self.b_original_max - self.b_original_min) * \
                    (self.b_mapped_max - self.b_mapped_min)
         return b_mapped
+
     def calculate_ability(self, score_level, score, cognitive_load_level, cognitive_load_score):
         if score < 50:
             theta_score = 2.0
@@ -358,8 +433,10 @@ class IRTOptimizedLearningAdaptation:
             theta_load = +1.0
         theta = theta_score + theta_load
         return max(min(theta, 5.0), 1.0)
+
     def calculate_probability(self, theta, b_mapped):
         return 1 / (1 + np.exp(-self.D * self.a * (theta - b_mapped)))
+
     def adjust_difficulty(self, delta, P_theta):
         if delta >= 2.0 and P_theta < 0.12:
             return 'significant_downgrade', '大幅降低语言复杂度，简化结构'
@@ -375,6 +452,7 @@ class IRTOptimizedLearningAdaptation:
             return 'slight_upgrade', '略微增加内容深度，引入简单挑战'
         else:
             return 'slight_adjust', '微调内容结构，保持现有难度'
+
     def predict_optimal_challenge(self, student_ability, overall_difficulty_original):
         b_mapped = self._map_difficulty_scale(overall_difficulty_original)
         P_theta = self.calculate_probability(student_ability, b_mapped)
@@ -387,6 +465,10 @@ class IRTOptimizedLearningAdaptation:
             'adjustment': adjustment,
             'suggestion': suggestion
         }
+
+# ========================================
+# 📚 主系统
+# ========================================
 
 class TextbookDifficultySystem:
     def __init__(self, cognitive_load_path, score_path, textbook_path, model_path='best_model_xgb.pkl',
