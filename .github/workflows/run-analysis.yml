@@ -41,23 +41,18 @@ jobs:
           pip --version
           pip list
 
-      # 4. 强制安装依赖（关键：使用 python -m pip）
       - name: Install Python packages
         run: |
-          # 使用 python -m pip 避免环境错乱
           python -m pip install --upgrade pip
-          pip install --no-cache-dir \
-            "numpy<2.0.0" \
-            "scipy<2.0.0" \
-            "pandas==1.5.3" \
-            "scikit-learn==1.2.2" \
-            "xgboost==1.7.6" \
-            "opencv-python-headless==4.8.0.76" \
-            "nltk==3.7" \
-            "requests==2.31.0" \
-            --force-reinstall
-
-          # 验证 requests 是否安装成功
+          python -m pip install \
+            numpy<2.0.0 \
+            scipy<2.0.0 \
+            pandas==1.5.3 \
+            scikit-learn==1.2.2 \
+            xgboost==1.7.6 \
+            opencv-python-headless==4.8.0.76 \
+            nltk==3.7 \
+            requests==2.31.0
           python -c "
           import requests
           print(f'✅ Requests 安装成功，版本: {requests.__version__}')
@@ -66,6 +61,7 @@ jobs:
           import cv2
           print(f'✅ OpenCV 安装成功，版本: {cv2.__version__}')
           "
+
 
       # 5. 缓存 NLTK 数据
       - name: Cache NLTK Data
