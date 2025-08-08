@@ -19,9 +19,9 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 20  # 增加超时时间
+    timeout-minutes: 20
     env:
-      NLTK_DATA: /tmp/nltk_data  # 全局环境变量
+      NLTK_DATA: /tmp/nltk_data
 
     steps:
       # 1. 检出代码
@@ -36,7 +36,13 @@ jobs:
           python-version: '3.9'
           cache: 'pip'
 
-      # 3. 缓存NLTK数据
+      # 3. 安装系统依赖（包括OpenCV）
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-opencv libopencv-dev
+
+      # 4. 缓存NLTK数据
       - name: Cache NLTK Data
         uses: actions/cache@v3
         with:
@@ -44,13 +50,8 @@ jobs:
           key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-nltk-
-# 新增：安装系统依赖（OpenCV所需）
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-opencv libopencv-dev
 
-      # 4. 安装依赖（使用固定版本）
+      # 5. 安装Python依赖
       - name: Install dependencies
         run: |
           pip install --upgrade pip
@@ -59,17 +60,16 @@ jobs:
             nltk==3.7 \
             pandas==1.5.3 \
             scikit-learn==1.2.2 \
-            xgboost==1.7.6
-            opencv-python-headless==4.8.0  # 新增
+            xgboost==1.7.6 \
+            opencv-python-headless==4.8.0
 
-      # 5. 设置NLTK环境
+      # 6. 设置NLTK环境
       - name: Setup NLTK
         run: |
           mkdir -p /tmp/nltk_data
           chmod -R 777 /tmp/nltk_data
           echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
 
-          # 强制下载所有必需资源
           python -c "
           import nltk, os
           nltk.download('punkt', download_dir=os.environ['NLTK_DATA'], quiet=False)
@@ -78,7 +78,7 @@ jobs:
           print('✅ 关键NLTK资源已下载')
           "
 
-      # 6. 验证NLTK
+      # 7. 验证NLTK
       - name: Validate NLTK
         run: |
           python -c "
@@ -94,7 +94,7 @@ jobs:
               exit(1)
           "
 
-      # 7. 准备输入数据
+      # 8. 准备输入数据
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
@@ -108,7 +108,7 @@ jobs:
           echo "输入文件内容:"
           jq . input_data.json || cat input_data.json
 
-      # 8. 运行分析脚本
+      # 9. 运行分析脚本
       - name: Run analysis
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
@@ -120,7 +120,6 @@ jobs:
           print('当前NLTK路径:', nltk.data.path)
           "
           
-          # 带重试的运行机制
           max_attempts=3
           attempt=1
           while [ $attempt -le $max_attempts ]; do
@@ -142,7 +141,7 @@ jobs:
           echo "分析结果:"
           jq . results.json || cat results.json
 
-      # 9. 提交结果
+      # 10. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
@@ -150,11 +149,10 @@ jobs:
           git add results.json
           git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
           
-          # 使用token推送
           remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
           git push "${remote_repo}" HEAD:${GITHUB_REF} || exit 0
 
-      # 10. 上传到Google Sheets
+      # 11. 上传到Google Sheets
       - name: Upload to Google Sheets
         continue-on-error: true
         env:
@@ -165,7 +163,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @results.json
 
-      # 11. 最终状态通知
+      # 12. 最终状态通知
       - name: Notify status
         if: always()
         run: |
