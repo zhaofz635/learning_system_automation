@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2. 设置Python环境
+      # 2. 设置 Python 环境
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
@@ -42,7 +42,7 @@ jobs:
           pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python numpy || true
           sudo apt-get remove -y python3-opencv libopencv-dev || true
 
-      # 4. 安装系统依赖（适配Ubuntu 24.04）
+      # 4. 安装系统依赖（适配 Ubuntu 24.04）
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -51,7 +51,7 @@ jobs:
             libgl1 \
             libgtk2.0-dev
 
-      # 5. 缓存NLTK数据
+      # 5. 缓存 NLTK 数据
       - name: Cache NLTK Data
         uses: actions/cache@v3
         with:
@@ -60,10 +60,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nltk-
 
-      # 6. 安装Python依赖（关键修复）
+      # 6. 安装 Python 依赖（关键修复）
       - name: Install Python packages
         run: |
-          # 先安装兼容的NumPy版本
+          # 先安装兼容的 NumPy 版本
           pip install "numpy<2.0.0" --no-cache-dir
           
           # 安装其他依赖（明确指定版本）
@@ -73,7 +73,7 @@ jobs:
             pandas==1.5.3 \
             scikit-learn==1.2.2 \
             xgboost==1.7.6 \
-            "scipy<2.0.0"
+            "scipy<2.0.0" \
             requests==2.31.0  # 新增 requests 模块
 
           # 验证安装
@@ -87,12 +87,14 @@ jobs:
               print(f'NumPy版本: {np.__version__}')
               import cv2
               print(f'✅ OpenCV加载成功，版本: {cv2.__version__}')
+              import requests
+              print(f'✅ Requests加载成功，版本: {requests.__version__}')
           except Exception as e:
               print(f'❌ 导入失败: {str(e)}')
               raise
           "
 
-      # 7. 设置NLTK环境
+      # 7. 设置 NLTK 环境
       - name: Setup NLTK
         run: |
           mkdir -p /tmp/nltk_data
@@ -129,10 +131,11 @@ jobs:
         run: |
           # 最终环境验证
           python -c "
-          import sys, numpy as np, cv2
+          import sys, numpy as np, cv2, requests
           print(f'Python: {sys.version}')
           print(f'NumPy: {np.__version__}')
           print(f'OpenCV: {cv2.__version__}')
+          print(f'Requests: {requests.__version__}')
           "
           
           # 带重试的运行机制
@@ -167,7 +170,7 @@ jobs:
           remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
           git push "${remote_repo}" HEAD:${GITHUB_REF} || exit 0
 
-      # 11. 上传到Google Sheets
+      # 11. 上传到 Google Sheets
       - name: Upload to Google Sheets
         continue-on-error: true
         env:
