@@ -19,9 +19,9 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
-      NLTK_DATA: /tmp/nltk_data  # 设置全局 NLTK_DATA 目录
+      NLTK_DATA: /tmp/nltk_data  # 统一指定 NLTK 数据目录
 
     steps:
       # 1. 检出代码
@@ -35,66 +35,66 @@ jobs:
         with:
           python-version: '3.9'
 
-      # 3. 安装依赖并配置 NLTK
+      # 3. 安装依赖并配置 NLTK 数据
       - name: Install dependencies and setup NLTK
         run: |
           python -m pip install --upgrade pip
+          pip install --force-reinstall -r requirements.txt
           pip install nltk
-      
-          python -c "import nltk; print('✅ nltk version:', nltk.__version__)"
-      
-          # 创建目录
+
+          # 创建 NLTK 数据目录
           mkdir -p /tmp/nltk_data
-      
-          # 下载 punkt 和 punkt_tab
+
+          # 下载 NLTK book 集合（包含 punkt, punkt_tab, stopwords, wordnet 等）
           python -c "
           import nltk
-          nltk.download('punkt', download_dir='/tmp/nltk_data', quiet=True)
-          nltk.download('punkt_tab', download_dir='/tmp/nltk_data', quiet=True)
-          " || { echo '❌ Failed to download nltk resources'; exit 1; }
-      
-          # 验证目录内容
-          echo '🔍 Checking /tmp/nltk_data/tokenizers:'
-          find /tmp/nltk_data -type f -name "*.pickle" -o -name "*.zip" | grep -i punkt | head -10
-      
-          # 测试分词（确保路径已添加）
+          print('📥 Downloading NLTK book collection (includes punkt, punkt_tab, etc.)...')
+          nltk.download('book', download_dir='/tmp/nltk_data', quiet=False)
+          print('✅ NLTK resources downloaded.')
+          "
+
+          # 验证关键文件是否存在
+          echo '🔍 Checking required NLTK files:'
+          find /tmp/nltk_data -type f -name '*.pickle' | grep -i 'punkt' | head -10
+
+          # 测试 word_tokenize 是否正常工作
           python -c "
           import nltk
-          nltk.data.path.append('/tmp/nltk_data')
-          tokens = nltk.word_tokenize('Hello world. How are you?')
-          print(f'✅ Tokenization successful: {tokens}')
-          " || { echo '❌ nltk setup failed'; exit 1; }
-      
-          # 设置环境变量
+          nltk.data.path.append('/tmp/nltk_data')  # 确保添加自定义路径
+          tokens = nltk.word_tokenize('Hello, world! This is a test sentence.')
+          print(f'✅ Tokenization successful: {tokens[:10]}...')
+          "
+
+          # 设置环境变量供后续步骤使用
           echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
-            # 4. 准备输入数据
-            - name: Prepare input files
-              run: |
-                echo '{
-                  "student_id": "${{ inputs.student_id }}",
-                  "score": ${{ inputs.score }},
-                  "cognitive_load": [${{ inputs.cognitive_load }}]
-                }' > input_data.json
-      
-                echo "📄 Generated input_data.json:"
-                cat input_data.json
+
+      # 4. 准备输入数据
+      - name: Prepare input files
+        run: |
+          echo '{
+            "student_id": "${{ inputs.student_id }}",
+            "score": ${{ inputs.score }},
+            "cognitive_load": [${{ inputs.cognitive_load }}]
+          }' > input_data.json
+
+          echo "📄 Generated input_data.json:"
+          cat input_data.json
 
       # 5. 运行分析脚本
       - name: Run analysis script
         env:
           Access_Key_Secret: ${{ secrets.Access_Key_Secret }}
-          NLTK_DATA: /tmp/nltk_data
-          PYTHONPATH: ${{ env.PYTHONPATH }}
         run: |
+          # 确认 Python 和 NLTK 可用
           which python
           python -c "
           import nltk
-          nltk.data.path.append('/tmp/nltk_data')
-          print('✅ Running nltk version:', nltk.__version__)
+          nltk.data.path.append('$NLTK_DATA')
+          print('✅ NLTK version:', nltk.__version__)
           print('NLTK data paths:', nltk.data.path)
-          " || { echo "❌ nltk not available at runtime"; exit 1; }
+          "
 
-          # 执行主分析脚本
+          # 执行主脚本
           python textbook_difficulty_system.py \
             --cognitive_load input_data.json \
             --scores input_data.json \
@@ -105,38 +105,37 @@ jobs:
           echo "📊 Analysis results:"
           cat results.json
 
-      # 6. 自动提交结果
+      # 6. 提交结果到仓库
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-          git add results.json
-          git add input_data.json  # 可选：记录输入
-
-          git commit -m "Auto-update: Analysis results for ${{ inputs.student_id }}" || echo "➡️ No changes to commit"
+          git add results.json input_data.json
+          git commit -m "Auto-commit: Results for ${{ inputs.student_id }}" || echo "➡️ No changes to commit"
           git push
 
-      # 7. 上传到 Google Apps Script (Google Drive)
+      # 7. 上传结果到 Google Drive（通过 GAS Web App）
       - name: Upload to Google Drive
         if: success()
         env:
           GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
         run: |
           if [ -f "results.json" ]; then
+            echo "📤 Uploading results.json to Google Drive..."
             curl -X POST "$GAS_SCRIPT_URL" \
               -H "Content-Type: application/json" \
               --data-binary @results.json
-            echo "📤 Results uploaded to Google Drive via GAS"
+            echo "✅ Upload completed"
           else
             echo "❌ results.json not found, upload skipped"
             exit 1
           fi
 
-      # 8. 通知完成（始终运行）
+      # 8. 通知完成状态
       - name: Notify completion
         if: always()
         run: |
-          echo "✅ Analysis completed for student ${{ inputs.student_id }}"
+          echo "✅ Workflow completed for student ${{ inputs.student_id }}"
           echo "📌 View results: https://github.com/zhaofz635/learning_system_automation/blob/main/results.json"
-          echo "🕒 Workflow finished at $(date)"
+          echo "🕒 Finished at $(date)"
