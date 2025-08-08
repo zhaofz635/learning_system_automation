@@ -19,81 +19,127 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      NLTK_DATA: /tmp/nltk_data  # 全局设置 NLTK_DATA
+    timeout-minutes: 15  # 增加超时时间
     
+    defaults:
+      run:
+        shell: bash
+        
+    env:
+      NLTK_DATA: /tmp/nltk_data  # 全局环境变量
+
     steps:
       # 1. 检出代码
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-    
+          persist-credentials: false
+
       # 2. 设置Python环境
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-    
-      # 3. 安装依赖
+          cache: 'pip'
+
+      # 3. 安装依赖（优化版）
       - name: Install dependencies
         run: |
+          # 创建持久化目录
+          sudo mkdir -p /tmp/nltk_data
+          sudo chmod -R 777 /tmp/nltk_data
+          
           python -m pip install --upgrade pip
-          pip install --force-reinstall -r requirements.txt
-          pip install nltk
-          python -c "import nltk; print('✅ nltk 版本:', nltk.__version__)" || { echo "❌ nltk 安装失败"; exit 1; }
-          mkdir -p /tmp/nltk_data  # 确保目录存在
-          python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')" || { echo "❌ nltk punkt 下载失败"; exit 1; }
-          ls -la /tmp/nltk_data 2>/dev/null || echo "⚠️ /tmp/nltk_data 目录可能为空或未创建"
-          export NLTK_DATA=/tmp/nltk_data
-    
-      # 4. 准备输入数据
+          pip install --no-cache-dir -r requirements.txt
+          
+          # 独立安装NLTK并验证
+          pip install --force-reinstall nltk==3.8.1  # 使用稳定版本
+          python -c "import nltk; nltk.download('punkt', download_dir='$NLTK_DATA')"
+          
+          # 验证安装
+          echo "NLTK数据目录内容:"
+          ls -la $NLTK_DATA/tokenizers/
+
+      # 4. 准备输入数据（兼容性改进）
       - name: Prepare input files
         run: |
-          echo '{
+          # 处理可能包含空格的输入
+          cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
+          cat > input_data.json <<EOF
+          {
             "student_id": "${{ inputs.student_id }}",
             "score": ${{ inputs.score }},
-            "cognitive_load": [${{ inputs.cognitive_load }}]
-          }' > input_data.json
-          cat input_data.json
-    
-      # 5. 运行分析脚本
-      - name: Run analysis script
+            "cognitive_load": [${cognitive_load_array// /,}]
+          }
+          EOF
+          echo "生成输入文件:"
+          jq . input_data.json || cat input_data.json
+
+      # 5. 运行分析脚本（增强版）
+      - name: Run analysis
         env:
-          Access_Key_Secret: ${{ secrets.Access_Key_Secret }}
-          NLTK_DATA: /tmp/nltk_data
-          PYTHONPATH: /opt/hostedtoolcache/Python/3.9.23/x64/lib/python3.9/site-packages
+          NLTK_DATA: /tmp/nltk_data  # 显式传递
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
         run: |
-          which python
-          python -c "import nltk; print('✅ 运行时 nltk 版本:', nltk.__version__)" || { echo "❌ 运行时 nltk 不可用"; exit 1; }
-          python textbook_difficulty_system.py \
+          echo "当前Python路径: $(which python)"
+          echo "NLTK数据路径: $NLTK_DATA"
+          
+          # 验证环境
+          python -c "import nltk; print('NLTK punkt路径:', nltk.data.find('tokenizers/punkt'))"
+          
+          # 运行主脚本（添加重试机制）
+          max_retries=3
+          attempt=0
+          until python textbook_difficulty_system.py \
             --cognitive_load input_data.json \
             --scores input_data.json \
             --textbook textbook.json \
             --output results.json
-          cat results.json
-    
-      # 6. 自动提交结果
+          do
+            attempt=$((attempt + 1))
+            if [ $attempt -ge $max_retries ]; then
+              echo "重试次数已达上限 ($max_retries 次)"
+              exit 1
+            fi
+            echo "尝试 $attempt 失败，10秒后重试..."
+            sleep 10
+          done
+          
+          echo "分析结果:"
+          jq . results.json || cat results.json
+
+      # 6. 提交结果（安全版）
       - name: Commit results
         run: |
+          # 检查是否有变更
+          if git diff --quiet; then
+            echo "没有需要提交的变更"
+            exit 0
+          fi
+          
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add results.json
-          git commit -m "Auto-update: Analysis results for ${{ inputs.student_id }}" || echo "No changes to commit"
-          git push
-    
-      # 7. 上传到Google Drive
-      - name: Upload to Google Drive
+          git commit -m "Auto-update: Analysis results for ${{ inputs.student_id }} [skip ci]"
+          
+          # 使用token推送
+          remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
+          git push "${remote_repo}" HEAD:${GITHUB_REF} || exit 0
+
+      # 7. 上传到Google Sheets（容错版）
+      - name: Upload to Google Sheets
+        continue-on-error: true  # 避免此步骤失败导致整个工作流失败
         env:
           GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
         run: |
-          curl -X POST "$GAS_SCRIPT_URL" \
+          curl --fail-with-body --retry 3 \
+            -X POST "$GAS_SCRIPT_URL" \
             -H "Content-Type: application/json" \
             --data-binary @results.json
-    
-      # 8. 发送通知
-      - name: Notify completion
+
+      # 8. 状态通知
+      - name: Notify status
         if: always()
         run: |
-          echo "Analysis completed for student ${{ inputs.student_id }}"
-          echo "View results: https://github.com/zhaofz635/learning_system_automation/blob/main/results.json"
+          echo "工作流状态: ${{ job.status }}"
+          echo "查看结果: https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF/results.json"
