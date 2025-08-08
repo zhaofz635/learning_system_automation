@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      NLTK_DATA: /tmp/nltk_data  # 全局设置 NLTK_DATA 环境变量
+      NLTK_DATA: /tmp/nltk_data  # 全局设置 NLTK_DATA
     
     steps:
       # 1. 检出代码
@@ -39,54 +39,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')"
-          ls -la /tmp/nltk_data  # 调试：检查数据是否下载
-    
-      # 4. 准备输入数据
-      - name: Prepare input files
-        run: |
-          echo '{
-            "student_id": "${{ inputs.student_id }}",
-            "score": ${{ inputs.score }},
-            "cognitive_load": [${{ inputs.cognitive_load }}]
-          }' > input_data.json
-          cat input_data.json
-    
-      # 5. 运行分析脚本
-      - name: Run analysis script
-        env:
-          Access_Key_Secret: ${{ secrets.Access_Key_Secret }}
-          NLTK_DATA: /tmp/nltk_data  # 确保脚本中使用相同环境变量
-        run: |
-          python textbook_difficulty_system.py \
-            --cognitive_load input_data.json \
-            --scores input_data.json \
-            --textbook textbook.json \
-            --output results.json
-          cat results.json
-    
-      # 6. 自动提交结果
-      - name: Commit results
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add results.json
-          git commit -m "Auto-update: Analysis results for ${{ inputs.student_id }}" || echo "No changes to commit"
-          git push
-    
-      # 7. 上传到Google Drive
-      - name: Upload to Google Drive
-        env:
-          GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
-        run: |
-          curl -X POST "$GAS_SCRIPT_URL" \
-            -H "Content-Type: application/json" \
-            --data-binary @results.json
-    
-      # 8. 发送通知
-      - name: Notify completion
-        if: always()
-        run: |
-          echo "Analysis completed for student ${{ inputs.student_id }}"
-          echo "View results: https://github.com/zhaofz635/learning_system_automation/blob/main/results.json"
+          pip install --force-reinstall -r requirements.txt
+          python -c "import nltk; print('✅ nltk 版本:', nltk.__version__)" || { echo "❌ nltk 安装失败"; exit 1; }
+          python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')" || { echo "❌ nltk punkt 下载失败"; exit 1; }
+          ls -la /tmp/nltk
