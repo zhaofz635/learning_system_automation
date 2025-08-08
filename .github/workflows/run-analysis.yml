@@ -42,7 +42,7 @@ jobs:
           pip install --force-reinstall -r requirements.txt
           pip install nltk
           python -c "import nltk; print('✅ nltk 版本:', nltk.__version__)" || { echo "❌ nltk 安装失败"; exit 1; }
-          mkdir -p /tmp/nltk_data  # 显式创建目录
+          mkdir -p /tmp/nltk_data  # 确保目录存在
           python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')" || { echo "❌ nltk punkt 下载失败"; exit 1; }
           ls -la /tmp/nltk_data 2>/dev/null || echo "⚠️ /tmp/nltk_data 目录可能为空或未创建"
           export NLTK_DATA=/tmp/nltk_data
