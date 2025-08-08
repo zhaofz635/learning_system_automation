@@ -20,6 +20,8 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      NLTK_DATA: /tmp/nltk_data  # 全局环境变量
 
     steps:
       - uses: actions/checkout@v4
@@ -28,70 +30,89 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+          cache: 'pip'
 
-      - name: Configure NLTK_DATA
+      - name: Create NLTK data directory
         run: |
+          sudo mkdir -p /tmp/nltk_data
+          sudo chmod -R 777 /tmp/nltk_data
           echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
-          mkdir -p /tmp/nltk_data
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install nltk
+          pip install nltk==3.8.1  # 使用稳定版本
 
-      - name: Download NLTK book data
+      - name: Download NLTK resources (full set)
         run: |
           python -c "
           import nltk
-          nltk.download('book', download_dir='/tmp/nltk_data', quiet=False)
+          nltk.download('punkt', download_dir='$NLTK_DATA')
+          nltk.download('averaged_perceptron_tagger', download_dir='$NLTK_DATA')
+          nltk.download('stopwords', download_dir='$NLTK_DATA')
+          nltk.download('wordnet', download_dir='$NLTK_DATA')
+          nltk.download('book', download_dir='$NLTK_DATA')
+          print('✅ NLTK资源下载完成')
           "
 
       - name: Validate NLTK setup
         run: |
           python -c "
           import nltk
-          print(nltk.word_tokenize('Hello world.'))
-          print('✅ NLTK is working.')
+          nltk.data.path.append('$NLTK_DATA')
+          print(nltk.data.find('tokenizers/punkt'))
+          print(nltk.word_tokenize('Hello world. This is a test.'))
+          print('✅ NLTK验证通过')
           "
 
       - name: Prepare input files
         run: |
-          echo '{
+          cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
+          cat > input_data.json <<EOF
+          {
             "student_id": "${{ inputs.student_id }}",
             "score": ${{ inputs.score }},
-            "cognitive_load": [${{ inputs.cognitive_load }}]
-          }' > input_data.json
-          cat input_data.json
+            "cognitive_load": [${cognitive_load_array// /,}]
+          }
+          EOF
+          echo "输入文件内容:"
+          jq . input_data.json || cat input_data.json
 
       - name: Run analysis script
         env:
-          Access_Key_Secret: ${{ secrets.Access_Key_Secret }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          NLTK_DATA: /tmp/nltk_data
         run: |
+          python -c "import nltk; print(f'NLTK数据路径: {nltk.data.path}')"
           python textbook_difficulty_system.py \
             --cognitive_load input_data.json \
             --scores input_data.json \
             --textbook textbook.json \
             --output results.json
-          cat results.json
+          echo "分析结果:"
+          jq . results.json || cat results.json
 
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add results.json
-          git commit -m "Auto: Results for ${{ inputs.student_id }}" || echo "No changes"
+          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
           git push
 
       - name: Upload to Google Drive
-        if: success()
+        continue-on-error: true  # 避免此步骤失败导致整个工作流失败
         env:
           GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
         run: |
-          curl -X POST "$GAS_SCRIPT_URL" -H "Content-Type: application/json" --data-binary @results.json
+          curl --fail --show-error --retry 3 \
+            -X POST "$GAS_SCRIPT_URL" \
+            -H "Content-Type: application/json" \
+            --data-binary @results.json
 
       - name: Notify completion
         if: always()
         run: |
-          echo "✅ Completed for ${{ inputs.student_id }}"
+          echo "工作流状态: ${{ job.status }}"
+          echo "结果文件: https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF/results.json"
