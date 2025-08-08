@@ -44,6 +44,11 @@ jobs:
           key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-nltk-
+# 新增：安装系统依赖（OpenCV所需）
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-opencv libopencv-dev
 
       # 4. 安装依赖（使用固定版本）
       - name: Install dependencies
@@ -55,6 +60,7 @@ jobs:
             pandas==1.5.3 \
             scikit-learn==1.2.2 \
             xgboost==1.7.6
+            opencv-python-headless==4.8.0  # 新增
 
       # 5. 设置NLTK环境
       - name: Setup NLTK
