@@ -25,35 +25,32 @@ jobs:
       # 1. 检出代码
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 需要完整历史记录以便后续git push
-      
+          fetch-depth: 0
+    
       # 2. 设置Python环境
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-      
+    
       # 3. 安装依赖
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python -c "import nltk; nltk.download('punkt')"
-      
-      # 4. 准备输入数据（兼容您的脚本格式）
+          python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')"
+          export NLTK_DATA=/tmp/nltk_data
+    
+      # 4. 准备输入数据
       - name: Prepare input files
         run: |
-          # 创建符合textbook_difficulty_system.py要求的JSON格式
           echo '{
             "student_id": "${{ inputs.student_id }}",
             "score": ${{ inputs.score }},
             "cognitive_load": [${{ inputs.cognitive_load }}]
           }' > input_data.json
-          
-          # 验证生成的文件
           cat input_data.json
-          jq '.' input_data.json  # 需要安装jq的话可以添加：sudo apt-get install jq
-      
+    
       # 5. 运行分析脚本
       - name: Run analysis script
         env:
@@ -64,30 +61,27 @@ jobs:
             --scores input_data.json \
             --textbook textbook.json \
             --output results.json
-          
-          # 验证结果文件
           cat results.json
-      
-      # 6. 自动提交结果到GitHub仓库
+    
+      # 6. 自动提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add results.json
-          git commit -m "Auto-update: Analysis results for ${{ inputs.student_id }}"
+          git commit -m "Auto-update: Analysis results for ${{ inputs.student_id }}" || echo "No changes to commit"
           git push
-      
-      # 7. 上传结果到Google Drive（通过Google Apps Script）
+    
+      # 7. 上传到Google Drive
       - name: Upload to Google Drive
         env:
-          GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}  # 存储Google Apps Script的Web App URL
+          GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
         run: |
-          # 使用curl将results.json发送到Google Apps Script
           curl -X POST "$GAS_SCRIPT_URL" \
             -H "Content-Type: application/json" \
             --data-binary @results.json
-      
-      # 8. 可选：发送通知
+    
+      # 8. 发送通知
       - name: Notify completion
         if: always()
         run: |
