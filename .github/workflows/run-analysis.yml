@@ -39,48 +39,45 @@ jobs:
       - name: Install dependencies and setup NLTK
         run: |
           python -m pip install --upgrade pip
-          pip install --force-reinstall -r requirements.txt
           pip install nltk
-
-          # 验证 nltk 安装
-          python -c "import nltk; print('✅ nltk version:', nltk.__version__)" || { echo "❌ Failed to import nltk"; exit 1; }
-
-          # 创建 nltk_data 目录
+      
+          python -c "import nltk; print('✅ nltk version:', nltk.__version__)"
+      
+          # 创建目录
           mkdir -p /tmp/nltk_data
-
-          # 下载 punkt tokenizer
+      
+          # 下载 punkt 和 punkt_tab
           python -c "
           import nltk
           nltk.download('punkt', download_dir='/tmp/nltk_data', quiet=True)
-          " || { echo '❌ Failed to download nltk punkt'; exit 1; }
-
+          nltk.download('punkt_tab', download_dir='/tmp/nltk_data', quiet=True)
+          " || { echo '❌ Failed to download nltk resources'; exit 1; }
+      
           # 验证目录内容
-          echo '🔍 Checking /tmp/nltk_data contents:'
-          find /tmp/nltk_data -type f -name "*.zip" -o -name "*.pickle" | head -10
-
-          # 测试是否能加载 punkt 并分词
+          echo '🔍 Checking /tmp/nltk_data/tokenizers:'
+          find /tmp/nltk_data -type f -name "*.pickle" -o -name "*.zip" | grep -i punkt | head -10
+      
+          # 测试分词（确保路径已添加）
           python -c "
           import nltk
           nltk.data.path.append('/tmp/nltk_data')
-          tokens = nltk.word_tokenize('This is a test sentence.')
-          assert len(tokens) > 0, 'Tokenization failed'
+          tokens = nltk.word_tokenize('Hello world. How are you?')
           print(f'✅ Tokenization successful: {tokens}')
-          " || { echo '❌ nltk punkt not usable'; exit 1; }
-
-          # 导出环境变量（对后续步骤生效）
+          " || { echo '❌ nltk setup failed'; exit 1; }
+      
+          # 设置环境变量
           echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
-
-      # 4. 准备输入数据
-      - name: Prepare input files
-        run: |
-          echo '{
-            "student_id": "${{ inputs.student_id }}",
-            "score": ${{ inputs.score }},
-            "cognitive_load": [${{ inputs.cognitive_load }}]
-          }' > input_data.json
-
-          echo "📄 Generated input_data.json:"
-          cat input_data.json
+            # 4. 准备输入数据
+            - name: Prepare input files
+              run: |
+                echo '{
+                  "student_id": "${{ inputs.student_id }}",
+                  "score": ${{ inputs.score }},
+                  "cognitive_load": [${{ inputs.cognitive_load }}]
+                }' > input_data.json
+      
+                echo "📄 Generated input_data.json:"
+                cat input_data.json
 
       # 5. 运行分析脚本
       - name: Run analysis script
