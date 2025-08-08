@@ -22,26 +22,23 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      # 1. 检出代码
       - uses: actions/checkout@v4
 
-      # 2. 设置 Python 环境（确保 pip 指向正确路径）
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
           cache: 'pip'
 
-      # 3. 验证当前 Python 和 pip
-      - name: Verify Python & pip
+      - name: Verify python & pip path and versions
         run: |
-          which python
-          which pip
+          echo "Python path: $(which python)"
+          echo "Pip path: $(which pip)"
           python --version
           pip --version
-          pip list
+          python -m pip list
 
-      - name: Install Python packages
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install \
@@ -53,42 +50,27 @@ jobs:
             opencv-python-headless==4.8.0.76 \
             nltk==3.7 \
             requests==2.31.0
-          python -c "
-          import requests
-          print(f'✅ Requests 安装成功，版本: {requests.__version__}')
-          import nltk
-          print(f'✅ NLTK 安装成功，版本: {nltk.__version__}')
-          import cv2
-          print(f'✅ OpenCV 安装成功，版本: {cv2.__version__}')
-          "
 
+      - name: Verify requests installed
+        run: |
+          python -c "import requests; print(f'Requests version: {requests.__version__}')"
 
-      # 5. 缓存 NLTK 数据
-      - name: Cache NLTK Data
-        uses: actions/cache@v3
-        with:
-          path: /tmp/nltk_data
-          key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-nltk-
-
-      # 6. 设置 NLTK 环境
-      - name: Setup NLTK
+      - name: Prepare NLTK data directory and download resources
         run: |
           mkdir -p /tmp/nltk_data
-          chmod -R 777 /tmp/nltk_data
           echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
-
           python -c "
-          import nltk
-          import os
-          nltk.download('punkt', download_dir=os.environ['NLTK_DATA'], quiet=False)
-          nltk.download('punkt_tab', download_dir=os.environ['NLTK_DATA'], quiet=False)
-          nltk.download('book', download_dir=os.environ['NLTK_DATA'], quiet=False)
-          print('✅ NLTK 资源下载完成')
-          "
+import nltk
+import os
+nltk.data.path.append(os.environ['NLTK_DATA'])
+nltk.download('punkt', download_dir=os.environ['NLTK_DATA'])
+nltk.download('averaged_perceptron_tagger', download_dir=os.environ['NLTK_DATA'])
+nltk.download('stopwords', download_dir=os.environ['NLTK_DATA'])
+nltk.download('wordnet', download_dir=os.environ['NLTK_DATA'])
+nltk.download('book', download_dir=os.environ['NLTK_DATA'])
+print('✅ NLTK resources downloaded')
+"
 
-      # 7. 准备输入数据
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
@@ -99,36 +81,23 @@ jobs:
             "cognitive_load": [${cognitive_load_array// /,}]
           }
           EOF
-          echo "📄 输入文件内容:"
+          echo "Input data:"
           cat input_data.json
 
-      # 8. 运行分析脚本
-      - name: Run analysis
+      - name: Run analysis script
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           NLTK_DATA: /tmp/nltk_data
         run: |
-          # 最终验证
-          python -c "
-          import sys
-          print(f'Python: {sys.version}')
-          import numpy as np; print(f'NumPy: {np.__version__}')
-          import cv2; print(f'OpenCV: {cv2.__version__}')
-          import requests; print(f'Requests: {requests.__version__}')
-          import nltk; print(f'NLTK: {nltk.__version__}')
-          "
-
-          # 执行主脚本
           python textbook_difficulty_system.py \
             --cognitive_load input_data.json \
             --scores input_data.json \
             --textbook textbook.json \
             --output results.json
 
-          echo "📊 分析结果:"
+          echo "Analysis results:"
           cat results.json
 
-      # 9. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
@@ -137,7 +106,6 @@ jobs:
           git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "No changes"
           git push
 
-      # 10. 上传到 Google Sheets
       - name: Upload to Google Sheets
         if: success()
         continue-on-error: true
@@ -149,9 +117,8 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @results.json
 
-      # 11. 通知状态
       - name: Notify status
         if: always()
         run: |
-          echo "✅ 工作流完成，状态: ${{ job.status }}"
-          echo "🔗 查看结果: https://github.com/${{ github.repository }}/blob/main/results.json"
+          echo "✅ Workflow completed with status: ${{ job.status }}"
+          echo "🔗 Results file: https://github.com/${{ github.repository }}/blob/main/results.json"
