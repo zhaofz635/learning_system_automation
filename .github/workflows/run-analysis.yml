@@ -36,14 +36,14 @@ jobs:
           python-version: '3.9'
           cache: 'pip'
 
-      # 3. 清理可能存在的旧版本OpenCV
-      - name: Clean existing OpenCV
+      # 3. 清理环境
+      - name: Clean existing packages
         run: |
-          pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python || true
+          pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python numpy || true
           sudo apt-get remove -y python3-opencv libopencv-dev || true
 
       # 4. 安装系统依赖（适配Ubuntu 24.04）
-      - name: Install OpenCV system dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -60,28 +60,34 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nltk-
 
-      # 6. 安装Python依赖（包含OpenCV）
+      # 6. 安装Python依赖（关键修复）
       - name: Install Python packages
         run: |
-          python -m pip install --upgrade pip
-          pip install --no-cache-dir --force-reinstall \
-            opencv-python-headless==4.8.0.74 \
+          # 先安装兼容的NumPy版本
+          pip install "numpy<2.0.0" --no-cache-dir
+          
+          # 安装其他依赖（明确指定版本）
+          pip install --no-cache-dir \
+            opencv-python-headless==4.8.0.76 \
             nltk==3.7 \
             pandas==1.5.3 \
             scikit-learn==1.2.2 \
-            xgboost==1.7.6
+            xgboost==1.7.6 \
+            "scipy<2.0.0"
 
-          # OpenCV验证
+          # 验证安装
           python -c "
+          import sys
+          print('Python路径:', sys.executable)
+          print('系统路径:', sys.path)
+          
           try:
+              import numpy as np
+              print(f'NumPy版本: {np.__version__}')
               import cv2
               print(f'✅ OpenCV加载成功，版本: {cv2.__version__}')
-              print(f'OpenCV构建信息: {cv2.getBuildInformation()}')
           except Exception as e:
-              print(f'❌ OpenCV加载失败: {str(e)}')
-              print('当前Python路径:')
-              import sys
-              print(sys.path)
+              print(f'❌ 导入失败: {str(e)}')
               raise
           "
 
@@ -100,25 +106,7 @@ jobs:
           print('✅ 关键NLTK资源已下载')
           "
 
-      # 8. 验证环境
-      - name: Validate environment
-        run: |
-          python -c "
-          import sys
-          print('Python路径:', sys.executable)
-          print('系统路径:', sys.path)
-          
-          # 验证所有关键包
-          for pkg in ['nltk', 'pandas', 'sklearn', 'xgboost', 'cv2']:
-              try:
-                  __import__(pkg)
-                  print(f'✅ {pkg} 导入成功')
-              except ImportError as e:
-                  print(f'❌ {pkg} 导入失败: {str(e)}')
-                  raise
-          "
-
-      # 9. 准备输入数据
+      # 8. 准备输入数据
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
@@ -132,14 +120,19 @@ jobs:
           echo "输入文件内容:"
           jq . input_data.json || cat input_data.json
 
-      # 10. 运行分析脚本
+      # 9. 运行分析脚本
       - name: Run analysis
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           NLTK_DATA: /tmp/nltk_data
         run: |
-          # 再次验证OpenCV
-          python -c "import cv2; print(f'最终验证 - OpenCV版本: {cv2.__version__}')"
+          # 最终环境验证
+          python -c "
+          import sys, numpy as np, cv2
+          print(f'Python: {sys.version}')
+          print(f'NumPy: {np.__version__}')
+          print(f'OpenCV: {cv2.__version__}')
+          "
           
           # 带重试的运行机制
           max_attempts=3
@@ -163,18 +156,17 @@ jobs:
           echo "分析结果:"
           jq . results.json || cat results.json
 
-      # 11. 提交结果
+      # 10. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add results.json
           git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
-          
           remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
           git push "${remote_repo}" HEAD:${GITHUB_REF} || exit 0
 
-      # 12. 上传到Google Sheets
+      # 11. 上传到Google Sheets
       - name: Upload to Google Sheets
         continue-on-error: true
         env:
@@ -185,7 +177,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @results.json
 
-      # 13. 最终状态通知
+      # 12. 最终状态通知
       - name: Notify status
         if: always()
         run: |
