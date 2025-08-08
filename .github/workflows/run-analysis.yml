@@ -20,6 +20,8 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      NLTK_DATA: /tmp/nltk_data  # 全局设置 NLTK_DATA 环境变量
     
     steps:
       # 1. 检出代码
@@ -39,7 +41,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')"
-          export NLTK_DATA=/tmp/nltk_data
+          ls -la /tmp/nltk_data  # 调试：检查数据是否下载
     
       # 4. 准备输入数据
       - name: Prepare input files
@@ -55,6 +57,7 @@ jobs:
       - name: Run analysis script
         env:
           Access_Key_Secret: ${{ secrets.Access_Key_Secret }}
+          NLTK_DATA: /tmp/nltk_data  # 确保脚本中使用相同环境变量
         run: |
           python textbook_difficulty_system.py \
             --cognitive_load input_data.json \
