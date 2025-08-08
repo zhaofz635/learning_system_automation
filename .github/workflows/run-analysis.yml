@@ -34,38 +34,40 @@ jobs:
 
       - name: Create NLTK data directory
         run: |
-          sudo mkdir -p /tmp/nltk_data
-          sudo chmod -R 777 /tmp/nltk_data
+          mkdir -p /tmp/nltk_data
+          chmod -R 777 /tmp/nltk_data
           echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install nltk==3.8.1  # 使用稳定版本
+          pip install nltk==3.8.1  # 稳定版本
 
-      - name: Download NLTK resources (full set)
+      - name: Download NLTK resources (include punkt_tab)
         run: |
           python -c "
-import nltk
-nltk.download('punkt', download_dir='$NLTK_DATA')
-nltk.download('punkt_tab', download_dir='$NLTK_DATA')  # 新增
-nltk.download('averaged_perceptron_tagger', download_dir='$NLTK_DATA')
-nltk.download('stopwords', download_dir='$NLTK_DATA')
-nltk.download('wordnet', download_dir='$NLTK_DATA')
-nltk.download('book', download_dir='$NLTK_DATA')
-print('✅ NLTK资源下载完成')
+          import nltk
+          import os
+          nltk.download('punkt', download_dir=os.environ['NLTK_DATA'])
+          nltk.download('punkt_tab', download_dir=os.environ['NLTK_DATA'])
+          nltk.download('averaged_perceptron_tagger', download_dir=os.environ['NLTK_DATA'])
+          nltk.download('stopwords', download_dir=os.environ['NLTK_DATA'])
+          nltk.download('wordnet', download_dir=os.environ['NLTK_DATA'])
+          nltk.download('book', download_dir=os.environ['NLTK_DATA'])
+          print('✅ NLTK资源下载完成')
           "
 
       - name: Validate NLTK setup
         run: |
           python -c "
-import nltk
-nltk.data.path.append('$NLTK_DATA')
-print(nltk.data.find('tokenizers/punkt'))
-print(nltk.data.find('tokenizers/punkt_tab'))
-print(nltk.word_tokenize('Hello world. This is a test.'))
-print('✅ NLTK验证通过')
+          import nltk, os
+          nltk.data.path.insert(0, os.environ['NLTK_DATA'])
+          print('🔍 NLTK路径:', nltk.data.path)
+          print(nltk.data.find('tokenizers/punkt'))
+          print(nltk.data.find('tokenizers/punkt_tab'))
+          print(nltk.word_tokenize('Hello world. This is a test.'))
+          print('✅ NLTK验证通过')
           "
 
       - name: Prepare input files
@@ -86,7 +88,7 @@ print('✅ NLTK验证通过')
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           NLTK_DATA: /tmp/nltk_data
         run: |
-          python -c "import nltk; print(f'NLTK数据路径: {nltk.data.path}')"
+          python -c "import nltk; nltk.data.path.insert(0, '/tmp/nltk_data'); print(f'NLTK数据路径: {nltk.data.path}')"
           python textbook_difficulty_system.py \
             --cognitive_load input_data.json \
             --scores input_data.json \
@@ -96,4 +98,25 @@ print('✅ NLTK验证通过')
           jq . results.json || cat results.json
 
       - name: Commit results
-       
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add results.json
+          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
+          git push
+
+      - name: Upload to Google Drive
+        continue-on-error: true
+        env:
+          GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
+        run: |
+          curl --fail --show-error --retry 3 \
+            -X POST "$GAS_SCRIPT_URL" \
+            -H "Content-Type: application/json" \
+            --data-binary @results.json
+
+      - name: Notify completion
+        if: always()
+        run: |
+          echo "工作流状态: ${{ job.status }}"
+          echo "结果文件: https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF/results.json"
