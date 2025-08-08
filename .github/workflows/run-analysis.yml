@@ -19,57 +19,76 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20  # 增加超时时间
     env:
       NLTK_DATA: /tmp/nltk_data  # 全局环境变量
 
     steps:
+      # 1. 检出代码
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
+      # 2. 设置Python环境
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
           cache: 'pip'
 
-      - name: Create NLTK data directory
+      # 3. 缓存NLTK数据
+      - name: Cache NLTK Data
+        uses: actions/cache@v3
+        with:
+          path: /tmp/nltk_data
+          key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-nltk-
+
+      # 4. 安装依赖（使用固定版本）
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install \
+            nltk==3.7 \
+            pandas==1.5.3 \
+            scikit-learn==1.2.2 \
+            xgboost==1.7.6
+
+      # 5. 设置NLTK环境
+      - name: Setup NLTK
         run: |
           mkdir -p /tmp/nltk_data
           chmod -R 777 /tmp/nltk_data
           echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
 
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install nltk==3.8.1  # 稳定版本
-
-      - name: Download NLTK resources (include punkt_tab)
-        run: |
+          # 强制下载所有必需资源
           python -c "
-          import nltk
-          import os
-          nltk.download('punkt', download_dir=os.environ['NLTK_DATA'])
-          nltk.download('punkt_tab', download_dir=os.environ['NLTK_DATA'])
-          nltk.download('averaged_perceptron_tagger', download_dir=os.environ['NLTK_DATA'])
-          nltk.download('stopwords', download_dir=os.environ['NLTK_DATA'])
-          nltk.download('wordnet', download_dir=os.environ['NLTK_DATA'])
-          nltk.download('book', download_dir=os.environ['NLTK_DATA'])
-          print('✅ NLTK资源下载完成')
+          import nltk, os
+          nltk.download('punkt', download_dir=os.environ['NLTK_DATA'], quiet=False)
+          nltk.download('punkt_tab', download_dir=os.environ['NLTK_DATA'], quiet=False)
+          nltk.download('book', download_dir=os.environ['NLTK_DATA'], quiet=False)
+          print('✅ 关键NLTK资源已下载')
           "
 
-      - name: Validate NLTK setup
+      # 6. 验证NLTK
+      - name: Validate NLTK
         run: |
           python -c "
           import nltk, os
           nltk.data.path.insert(0, os.environ['NLTK_DATA'])
-          print('🔍 NLTK路径:', nltk.data.path)
-          print(nltk.data.find('tokenizers/punkt'))
-          print(nltk.data.find('tokenizers/punkt_tab'))
-          print(nltk.word_tokenize('Hello world. This is a test.'))
-          print('✅ NLTK验证通过')
+          try:
+              print('找到punkt:', nltk.data.find('tokenizers/punkt'))
+              print('找到punkt_tab:', nltk.data.find('tokenizers/punkt_tab/english'))
+              print('分词测试:', nltk.word_tokenize('This is a test.'))
+              print('✅ NLTK验证通过')
+          except Exception as e:
+              print('❌ NLTK验证失败:', str(e))
+              exit(1)
           "
 
+      # 7. 准备输入数据
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
@@ -83,29 +102,54 @@ jobs:
           echo "输入文件内容:"
           jq . input_data.json || cat input_data.json
 
-      - name: Run analysis script
+      # 8. 运行分析脚本
+      - name: Run analysis
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           NLTK_DATA: /tmp/nltk_data
         run: |
-          python -c "import nltk; nltk.data.path.insert(0, '/tmp/nltk_data'); print(f'NLTK数据路径: {nltk.data.path}')"
-          python textbook_difficulty_system.py \
-            --cognitive_load input_data.json \
-            --scores input_data.json \
-            --textbook textbook.json \
-            --output results.json
+          python -c "
+          import nltk, os
+          nltk.data.path.insert(0, os.environ['NLTK_DATA'])
+          print('当前NLTK路径:', nltk.data.path)
+          "
+          
+          # 带重试的运行机制
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "尝试第 $attempt 次运行..."
+            python textbook_difficulty_system.py \
+              --cognitive_load input_data.json \
+              --scores input_data.json \
+              --textbook textbook.json \
+              --output results.json && break
+            attempt=$((attempt + 1))
+            sleep 5
+          done
+          
+          if [ $attempt -gt $max_attempts ]; then
+            echo "❌ 运行失败，已达最大尝试次数"
+            exit 1
+          fi
+          
           echo "分析结果:"
           jq . results.json || cat results.json
 
+      # 9. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add results.json
           git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
-          git push
+          
+          # 使用token推送
+          remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
+          git push "${remote_repo}" HEAD:${GITHUB_REF} || exit 0
 
-      - name: Upload to Google Drive
+      # 10. 上传到Google Sheets
+      - name: Upload to Google Sheets
         continue-on-error: true
         env:
           GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
@@ -115,8 +159,10 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @results.json
 
-      - name: Notify completion
+      # 11. 最终状态通知
+      - name: Notify status
         if: always()
         run: |
           echo "工作流状态: ${{ job.status }}"
           echo "结果文件: https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF/results.json"
+          echo "详细日志: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
