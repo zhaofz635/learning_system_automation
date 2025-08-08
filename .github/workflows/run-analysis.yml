@@ -20,36 +20,52 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      NLTK_DATA: /tmp/nltk_data
 
     steps:
       # 1. 检出代码
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # 2. 设置 Python 环境
+      # 2. 设置 Python 环境（确保 pip 指向正确路径）
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
           cache: 'pip'
 
-      # 3. 清理环境
-      - name: Clean existing packages
+      # 3. 验证当前 Python 和 pip
+      - name: Verify Python & pip
         run: |
-          pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python numpy || true
-          sudo apt-get remove -y python3-opencv libopencv-dev || true
+          which python
+          which pip
+          python --version
+          pip --version
+          pip list
 
-      # 4. 安装系统依赖（适配 Ubuntu 24.04）
-      - name: Install system dependencies
+      # 4. 强制安装依赖（关键：使用 python -m pip）
+      - name: Install Python packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libopencv-dev \
-            libgl1 \
-            libgtk2.0-dev
+          # 使用 python -m pip 避免环境错乱
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir \
+            "numpy<2.0.0" \
+            "scipy<2.0.0" \
+            "pandas==1.5.3" \
+            "scikit-learn==1.2.2" \
+            "xgboost==1.7.6" \
+            "opencv-python-headless==4.8.0.76" \
+            "nltk==3.7" \
+            "requests==2.31.0" \
+            --force-reinstall
+
+          # 验证 requests 是否安装成功
+          python -c "
+          import requests
+          print(f'✅ Requests 安装成功，版本: {requests.__version__}')
+          import nltk
+          print(f'✅ NLTK 安装成功，版本: {nltk.__version__}')
+          import cv2
+          print(f'✅ OpenCV 安装成功，版本: {cv2.__version__}')
+          "
 
       # 5. 缓存 NLTK 数据
       - name: Cache NLTK Data
@@ -60,41 +76,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nltk-
 
-      # 6. 安装 Python 依赖（关键修复）
-      - name: Install Python packages
-        run: |
-          # 先安装兼容的 NumPy 版本
-          pip install "numpy<2.0.0" --no-cache-dir
-          
-          # 安装其他依赖（明确指定版本）
-          pip install --no-cache-dir \
-            opencv-python-headless==4.8.0.76 \
-            nltk==3.7 \
-            pandas==1.5.3 \
-            scikit-learn==1.2.2 \
-            xgboost==1.7.6 \
-            "scipy<2.0.0" \
-            requests==2.31.0  # 新增 requests 模块
-
-          # 验证安装
-          python -c "
-          import sys
-          print('Python路径:', sys.executable)
-          print('系统路径:', sys.path)
-          
-          try:
-              import numpy as np
-              print(f'NumPy版本: {np.__version__}')
-              import cv2
-              print(f'✅ OpenCV加载成功，版本: {cv2.__version__}')
-              import requests
-              print(f'✅ Requests加载成功，版本: {requests.__version__}')
-          except Exception as e:
-              print(f'❌ 导入失败: {str(e)}')
-              raise
-          "
-
-      # 7. 设置 NLTK 环境
+      # 6. 设置 NLTK 环境
       - name: Setup NLTK
         run: |
           mkdir -p /tmp/nltk_data
@@ -102,14 +84,15 @@ jobs:
           echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
 
           python -c "
-          import nltk, os
+          import nltk
+          import os
           nltk.download('punkt', download_dir=os.environ['NLTK_DATA'], quiet=False)
           nltk.download('punkt_tab', download_dir=os.environ['NLTK_DATA'], quiet=False)
           nltk.download('book', download_dir=os.environ['NLTK_DATA'], quiet=False)
-          print('✅ 关键NLTK资源已下载')
+          print('✅ NLTK 资源下载完成')
           "
 
-      # 8. 准备输入数据
+      # 7. 准备输入数据
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
@@ -120,58 +103,47 @@ jobs:
             "cognitive_load": [${cognitive_load_array// /,}]
           }
           EOF
-          echo "输入文件内容:"
-          jq . input_data.json || cat input_data.json
+          echo "📄 输入文件内容:"
+          cat input_data.json
 
-      # 9. 运行分析脚本
+      # 8. 运行分析脚本
       - name: Run analysis
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           NLTK_DATA: /tmp/nltk_data
         run: |
-          # 最终环境验证
+          # 最终验证
           python -c "
-          import sys, numpy as np, cv2, requests
+          import sys
           print(f'Python: {sys.version}')
-          print(f'NumPy: {np.__version__}')
-          print(f'OpenCV: {cv2.__version__}')
-          print(f'Requests: {requests.__version__}')
+          import numpy as np; print(f'NumPy: {np.__version__}')
+          import cv2; print(f'OpenCV: {cv2.__version__}')
+          import requests; print(f'Requests: {requests.__version__}')
+          import nltk; print(f'NLTK: {nltk.__version__}')
           "
-          
-          # 带重试的运行机制
-          max_attempts=3
-          attempt=1
-          while [ $attempt -le $max_attempts ]; do
-            echo "尝试第 $attempt 次运行..."
-            python textbook_difficulty_system.py \
-              --cognitive_load input_data.json \
-              --scores input_data.json \
-              --textbook textbook.json \
-              --output results.json && break
-            attempt=$((attempt + 1))
-            sleep 5
-          done
-          
-          if [ $attempt -gt $max_attempts ]; then
-            echo "❌ 运行失败，已达最大尝试次数"
-            exit 1
-          fi
-          
-          echo "分析结果:"
-          jq . results.json || cat results.json
 
-      # 10. 提交结果
+          # 执行主脚本
+          python textbook_difficulty_system.py \
+            --cognitive_load input_data.json \
+            --scores input_data.json \
+            --textbook textbook.json \
+            --output results.json
+
+          echo "📊 分析结果:"
+          cat results.json
+
+      # 9. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add results.json
-          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
-          remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
-          git push "${remote_repo}" HEAD:${GITHUB_REF} || exit 0
+          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "No changes"
+          git push
 
-      # 11. 上传到 Google Sheets
+      # 10. 上传到 Google Sheets
       - name: Upload to Google Sheets
+        if: success()
         continue-on-error: true
         env:
           GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
@@ -181,10 +153,9 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @results.json
 
-      # 12. 最终状态通知
+      # 11. 通知状态
       - name: Notify status
         if: always()
         run: |
-          echo "工作流状态: ${{ job.status }}"
-          echo "结果文件: https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF/results.json"
-          echo "详细日志: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          echo "✅ 工作流完成，状态: ${{ job.status }}"
+          echo "🔗 查看结果: https://github.com/${{ github.repository }}/blob/main/results.json"
