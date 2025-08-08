@@ -38,7 +38,6 @@ jobs:
         run: |
           echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
           mkdir -p /tmp/nltk_data
-        # 注意：env 不在此处设置，而是通过 GITHUB_ENV 注入后续步骤
 
       # 4. 安装依赖并下载 NLTK 数据
       - name: Install dependencies and download NLTK data
@@ -47,7 +46,6 @@ jobs:
           pip install -r requirements.txt
           pip install nltk
 
-          # 下载 book 集合（包含 punkt, punkt_tab 等）
           python -c "
           import nltk
           print('📥 Downloading NLTK book collection...')
@@ -55,15 +53,13 @@ jobs:
           print('✅ NLTK data downloaded to /tmp/nltk_data')
           "
 
-      # 5. 验证 tokenization 是否可用（无需手动添加路径）
+      # 5. 验证 tokenization 是否可用
       - name: Validate NLTK setup
         run: |
           python -c "
           import nltk
-          # ✅ 不需要 nltk.data.path.append()！
-          # NLTK 自动从 $NLTK_DATA 加载资源
-          tokens = nltk.word_tokenize('Hello, world! This is a test sentence.')
-          print(f'✅ Success: Tokenization works → {tokens}')
+          tokens = nltk.word_tokenize('Hello, world!')
+          print(f'✅ Success: {tokens}')
           "
 
       # 6. 准备输入数据
@@ -76,16 +72,33 @@ jobs:
           }' > input_data.json
           cat input_data.json
 
-      # 7. 运行分析脚本
+      # 7. 运行分析脚本（确保环境变量传递）
       - name: Run analysis script
         env:
           Access_Key_Secret: ${{ secrets.Access_Key_Secret }}
+          NLTK_DATA: ${{ env.NLTK_DATA }}  # ✅ 显式传递环境变量
         run: |
+          set -e  # 🔥 失败立即退出，便于调试
+          echo "🔍 Current NLTK data paths:"
+          python -c "import nltk; print(nltk.data.path)"
+
+          # ✅ 关键：在运行前再次验证
+          python -c "
+          import nltk
+          try:
+              print(nltk.word_tokenize('Test sentence.'))
+          except Exception as e:
+              print('❌ Tokenization failed in script context:')
+              print(e)
+              exit(1)
+          "
+
           python textbook_difficulty_system.py \
             --cognitive_load input_data.json \
             --scores input_data.json \
             --textbook textbook.json \
             --output results.json
+
           cat results.json
 
       # 8. 提交结果
