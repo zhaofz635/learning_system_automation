@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      NLTK_DATA: /tmp/nltk_data  # 统一指定 NLTK 数据目录
+      NLTK_DATA: /tmp/nltk_data  # NLTK 数据根目录
 
     steps:
       # 1. 检出代码
@@ -35,34 +35,32 @@ jobs:
         with:
           python-version: '3.9'
 
-      # 3. 安装依赖并配置 NLTK 数据
-      - name: Install dependencies and setup NLTK
+      # 3. 安装依赖并下载 NLTK 数据（推荐方式）
+      - name: Install dependencies and NLTK data
         run: |
+          # 升级 pip 并安装依赖
           python -m pip install --upgrade pip
-          pip install --force-reinstall -r requirements.txt
+          pip install -r requirements.txt
           pip install nltk
 
           # 创建 NLTK 数据目录
           mkdir -p /tmp/nltk_data
 
-          # 下载 NLTK book 集合（包含 punkt, punkt_tab, stopwords, wordnet 等）
+          # 🔑 核心：使用 NLTK 官方推荐的 'book' 集合
+          # 包含：punkt, punkt_tab, stopwords, wordnet, averaged_perceptron_tagger 等
           python -c "
           import nltk
-          print('📥 Downloading NLTK book collection (includes punkt, punkt_tab, etc.)...')
+          print('📥 Downloading NLTK book collection (official recommended)...')
           nltk.download('book', download_dir='/tmp/nltk_data', quiet=False)
-          print('✅ NLTK resources downloaded.')
+          print('✅ NLTK data installed.')
           "
 
-          # 验证关键文件是否存在
-          echo '🔍 Checking required NLTK files:'
-          find /tmp/nltk_data -type f -name '*.pickle' | grep -i 'punkt' | head -10
-
-          # 测试 word_tokenize 是否正常工作
+          # ✅ 将自定义路径添加到 nltk 搜索路径（关键！）
           python -c "
           import nltk
-          nltk.data.path.append('/tmp/nltk_data')  # 确保添加自定义路径
-          tokens = nltk.word_tokenize('Hello, world! This is a test sentence.')
-          print(f'✅ Tokenization successful: {tokens[:10]}...')
+          nltk.data.path.append('/tmp/nltk_data')  # 确保能加载 punkt_tab
+          tokens = nltk.word_tokenize('Hello, world! This is a test.')
+          print(f'✅ Tokenization works: {tokens}')
           "
 
           # 设置环境变量供后续步骤使用
@@ -76,8 +74,6 @@ jobs:
             "score": ${{ inputs.score }},
             "cognitive_load": [${{ inputs.cognitive_load }}]
           }' > input_data.json
-
-          echo "📄 Generated input_data.json:"
           cat input_data.json
 
       # 5. 运行分析脚本
@@ -85,57 +81,35 @@ jobs:
         env:
           Access_Key_Secret: ${{ secrets.Access_Key_Secret }}
         run: |
-          # 确认 Python 和 NLTK 可用
-          which python
-          python -c "
-          import nltk
-          nltk.data.path.append('$NLTK_DATA')
-          print('✅ NLTK version:', nltk.__version__)
-          print('NLTK data paths:', nltk.data.path)
-          "
-
-          # 执行主脚本
           python textbook_difficulty_system.py \
             --cognitive_load input_data.json \
             --scores input_data.json \
             --textbook textbook.json \
             --output results.json
-
-          # 输出结果
-          echo "📊 Analysis results:"
           cat results.json
 
-      # 6. 提交结果到仓库
+      # 6. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-
           git add results.json input_data.json
-          git commit -m "Auto-commit: Results for ${{ inputs.student_id }}" || echo "➡️ No changes to commit"
+          git commit -m "Auto: Results for ${{ inputs.student_id }}" || echo "No changes to commit"
           git push
 
-      # 7. 上传结果到 Google Drive（通过 GAS Web App）
+      # 7. 上传到 Google Drive
       - name: Upload to Google Drive
         if: success()
         env:
           GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
         run: |
-          if [ -f "results.json" ]; then
-            echo "📤 Uploading results.json to Google Drive..."
-            curl -X POST "$GAS_SCRIPT_URL" \
-              -H "Content-Type: application/json" \
-              --data-binary @results.json
-            echo "✅ Upload completed"
-          else
-            echo "❌ results.json not found, upload skipped"
-            exit 1
-          fi
+          curl -X POST "$GAS_SCRIPT_URL" \
+            -H "Content-Type: application/json" \
+            --data-binary @results.json
 
-      # 8. 通知完成状态
+      # 8. 完成通知
       - name: Notify completion
         if: always()
         run: |
-          echo "✅ Workflow completed for student ${{ inputs.student_id }}"
-          echo "📌 View results: https://github.com/zhaofz635/learning_system_automation/blob/main/results.json"
-          echo "🕒 Finished at $(date)"
+          echo "✅ Analysis completed for ${{ inputs.student_id }}"
+          echo "📌 Results: https://github.com/zhaofz635/learning_system_automation/blob/main/results.json"
