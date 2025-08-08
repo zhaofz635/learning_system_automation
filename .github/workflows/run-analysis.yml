@@ -47,23 +47,25 @@ jobs:
       - name: Download NLTK resources (full set)
         run: |
           python -c "
-          import nltk
-          nltk.download('punkt', download_dir='$NLTK_DATA')
-          nltk.download('averaged_perceptron_tagger', download_dir='$NLTK_DATA')
-          nltk.download('stopwords', download_dir='$NLTK_DATA')
-          nltk.download('wordnet', download_dir='$NLTK_DATA')
-          nltk.download('book', download_dir='$NLTK_DATA')
-          print('✅ NLTK资源下载完成')
+import nltk
+nltk.download('punkt', download_dir='$NLTK_DATA')
+nltk.download('punkt_tab', download_dir='$NLTK_DATA')  # 新增
+nltk.download('averaged_perceptron_tagger', download_dir='$NLTK_DATA')
+nltk.download('stopwords', download_dir='$NLTK_DATA')
+nltk.download('wordnet', download_dir='$NLTK_DATA')
+nltk.download('book', download_dir='$NLTK_DATA')
+print('✅ NLTK资源下载完成')
           "
 
       - name: Validate NLTK setup
         run: |
           python -c "
-          import nltk
-          nltk.data.path.append('$NLTK_DATA')
-          print(nltk.data.find('tokenizers/punkt'))
-          print(nltk.word_tokenize('Hello world. This is a test.'))
-          print('✅ NLTK验证通过')
+import nltk
+nltk.data.path.append('$NLTK_DATA')
+print(nltk.data.find('tokenizers/punkt'))
+print(nltk.data.find('tokenizers/punkt_tab'))
+print(nltk.word_tokenize('Hello world. This is a test.'))
+print('✅ NLTK验证通过')
           "
 
       - name: Prepare input files
@@ -94,25 +96,4 @@ jobs:
           jq . results.json || cat results.json
 
       - name: Commit results
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add results.json
-          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
-          git push
-
-      - name: Upload to Google Drive
-        continue-on-error: true  # 避免此步骤失败导致整个工作流失败
-        env:
-          GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
-        run: |
-          curl --fail --show-error --retry 3 \
-            -X POST "$GAS_SCRIPT_URL" \
-            -H "Content-Type: application/json" \
-            --data-binary @results.json
-
-      - name: Notify completion
-        if: always()
-        run: |
-          echo "工作流状态: ${{ job.status }}"
-          echo "结果文件: https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF/results.json"
+       
