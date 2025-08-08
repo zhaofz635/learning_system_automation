@@ -42,13 +42,13 @@ jobs:
           pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python || true
           sudo apt-get remove -y python3-opencv libopencv-dev || true
 
-      # 4. 安装系统依赖（必须）
+      # 4. 安装系统依赖（适配Ubuntu 24.04）
       - name: Install OpenCV system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             libopencv-dev \
-            libgl1-mesa-glx \
+            libgl1 \
             libgtk2.0-dev
 
       # 5. 缓存NLTK数据
