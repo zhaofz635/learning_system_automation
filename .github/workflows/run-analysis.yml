@@ -69,7 +69,7 @@ jobs:
             opencv-python-headless==4.8.0.76 \
             nltk==3.7 \
             pandas==1.5.3 \
-            scikit-learn==1.2.2 \
+            scikit-learn==1.6.1
             scikit-image==0.21.0 \
             xgboost==2.1.4 \
             "scipy<2.0.0" \
