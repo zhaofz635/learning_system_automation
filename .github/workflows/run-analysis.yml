@@ -34,7 +34,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-          # cache: 'pip'  # 临时禁用缓存以确保安装最新依赖
+          cache: 'pip'
 
       # 3. 清理环境
       - name: Clean existing packages
@@ -63,21 +63,18 @@ jobs:
       # 6. 安装 Python 依赖（关键修复）
       - name: Install Python packages
         run: |
-          # 确保使用正确的 pip
-          python -m pip install --upgrade pip
-          
           # 先安装兼容的 NumPy 版本
-          python -m pip install "numpy<2.0.0" --no-cache-dir
+          pip install "numpy<2.0.0" --no-cache-dir
           
           # 安装其他依赖（明确指定版本）
-          python -m pip install --no-cache-dir \
+          pip install --no-cache-dir \
             opencv-python-headless==4.8.0.76 \
             nltk==3.7 \
             pandas==1.5.3 \
             scikit-learn==1.2.2 \
             xgboost==1.7.6 \
             "scipy<2.0.0" \
-            requests==2.31.0
+            requests==2.31.0  # 新增 requests 模块
 
           # 验证安装
           python -c "
@@ -132,12 +129,6 @@ jobs:
           ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
           NLTK_DATA: /tmp/nltk_data
         run: |
-          # 验证输入文件存在
-          if [ ! -f textbook.json ]; then
-            echo "❌ textbook.json 文件不存在"
-            exit 1
-          fi
-          
           # 最终环境验证
           python -c "
           import sys, numpy as np, cv2, requests
@@ -156,7 +147,7 @@ jobs:
               --cognitive_load input_data.json \
               --scores input_data.json \
               --textbook textbook.json \
-              --output results.json 2>&1 | tee attempt_$attempt.log && break
+              --output results.json && break
             attempt=$((attempt + 1))
             sleep 5
           done
