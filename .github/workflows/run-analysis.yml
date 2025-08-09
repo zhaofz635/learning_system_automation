@@ -215,6 +215,16 @@ jobs:
           echo "分析结果:"
           jq . results.json || cat results.json
 
+      # # 10. 提交结果
+      # - name: Commit results
+      #   run: |
+      #     git config --global user.name "GitHub Actions"
+      #     git config --global user.email "actions@github.com"
+      #     git add results.json
+      #     git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
+      #     remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
+      #     git push "${remote_repo}" HEAD:${GITHUB_REF} || exit 0
+
       # 10. 提交结果
       - name: Commit results
         run: |
@@ -222,8 +232,10 @@ jobs:
           git config --global user.email "actions@github.com"
           git add results.json
           git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
+          git pull --rebase origin main
           remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
-          git push "${remote_repo}" HEAD:${GITHUB_REF} || exit 0
+          git push "${remote_repo}" HEAD:main || exit 0
+
 
       # 11. 上传到 Google Sheets
       - name: Upload to Google Sheets
