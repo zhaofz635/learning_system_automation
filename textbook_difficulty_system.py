@@ -250,13 +250,53 @@ class InputModule:
         self.score_data = self.load_scores(score_path)
         self.textbook_data = self.load_textbook(textbook_path)
 
+    # def load_cognitive_load(self, path):
+    #     try:
+    #         with open(path, 'r', encoding='utf-8') as f:
+    #             data = json.load(f)
+    #         df = pd.DataFrame(data)
+    #         if 'cognitive_load' not in df.columns or df['cognitive_load'].apply(lambda x: len(x) != 8).any():
+    #             raise ValueError("认知负荷数据格式错误：每个学生必须有 8 个评分")
+    #         df['has_valid_responses'] = df['cognitive_load'].apply(lambda x: any(v is not None for v in x))
+    #         if not df['has_valid_responses'].any():
+    #             print("警告：所有认知负荷数据均为 null，使用默认值")
+    #             df['cognitive_load_level'] = 'medium'
+    #             df['cognitive_load_score'] = 50.0
+    #         else:
+    #             df[['cognitive_load_level', 'cognitive_load_score']] = df['cognitive_load'].apply(self.calculate_cognitive_load).apply(pd.Series)
+    #         return df
+    #     except json.JSONDecodeError as e:
+    #         print(f"JSON 解析错误在文件 {path}: {str(e)}")
+    #         print(f"错误位置: 行 {e.lineno}, 列 {e.colno}, 字符 {e.pos}")
+    #         print(f"错误片段: {e.doc[max(0, e.pos-20):e.pos+20]}")
+    #         raise ValueError(f"加载认知负荷数据失败: JSON 格式错误 - {str(e)}")
+    #     except Exception as e:
+    #         raise ValueError(f"加载认知负荷数据失败: {str(e)}")
+
     def load_cognitive_load(self, path):
         try:
             with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+                # 替换中文逗号为英文逗号
+                content = f.read()
+                content = content.replace('，', ',')
+                data = json.loads(content)
+            # 检查是否为数组
+            if not isinstance(data, list):
+                raise ValueError(f"认知负荷数据必须为 JSON 数组，得到 {type(data)}")
             df = pd.DataFrame(data)
-            if 'cognitive_load' not in df.columns or df['cognitive_load'].apply(lambda x: len(x) != 8).any():
-                raise ValueError("认知负荷数据格式错误：每个学生必须有 8 个评分")
+            if 'cognitive_load' not in df.columns:
+                raise ValueError("认知负荷数据缺少 'cognitive_load' 字段")
+            # 检查 cognitive_load 是否为列表且长度为 8
+            def validate_cognitive_load(x):
+                if not isinstance(x, list):
+                    raise ValueError(f"认知负荷数据格式错误：'cognitive_load' 必须为列表，得到 {type(x)}")
+                if len(x) != 8:
+                    raise ValueError(f"认知负荷数据格式错误：'cognitive_load' 列表长度必须为 8，得到 {len(x)}")
+                # 检查每个元素是否为整数
+                if not all(isinstance(v, int) for v in x):
+                    raise ValueError(f"认知负荷数据格式错误：'cognitive_load' 列表元素必须为整数，得到 {x}")
+                return True
+            df['cognitive_load'].apply(validate_cognitive_load)
             df['has_valid_responses'] = df['cognitive_load'].apply(lambda x: any(v is not None for v in x))
             if not df['has_valid_responses'].any():
                 print("警告：所有认知负荷数据均为 null，使用默认值")
@@ -272,6 +312,7 @@ class InputModule:
             raise ValueError(f"加载认知负荷数据失败: JSON 格式错误 - {str(e)}")
         except Exception as e:
             raise ValueError(f"加载认知负荷数据失败: {str(e)}")
+
 
     def calculate_cognitive_load(self, cognitive_load):
         valid_responses = [r for r in cognitive_load if r is not None]
