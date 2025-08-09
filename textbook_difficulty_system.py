@@ -7,6 +7,8 @@ import re
 import math
 from datetime import datetime
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import nltk
 from nltk.tokenize import word_tokenize, sent_tokenize
 from nltk.corpus import stopwords
@@ -85,7 +87,7 @@ class TableComplexityAnalyzer:
             words = word_tokenize(text)
             if len(words) > 100:
                 score = 0.5
-        return score
+        return float(score)  # 转换为 Python float
 
     def _calc_structured_features(self, entry):
         if 'structured_data' not in entry or not entry['structured_data']:
@@ -101,9 +103,9 @@ class TableComplexityAnalyzer:
             col_var = X.mean(axis=1).sum() * 0.5
         else:
             col_var = 0
-        return (row_comp * self.sub_weights['row_complexity'] +
-                method_div * self.sub_weights['method_diversity'] +
-                col_var * self.sub_weights['column_variety'])
+        return float(row_comp * self.sub_weights['row_complexity'] +
+                     method_div * self.sub_weights['method_diversity'] +
+                     col_var * self.sub_weights['column_variety'])
 
     def _calc_image_features(self, image_path):
         if not image_path or not os.path.exists(image_path):
@@ -121,7 +123,7 @@ class TableComplexityAnalyzer:
                                 levels=256, symmetric=True, normed=True)
             contrast = graycoprops(glcm, 'contrast').mean()
             dissimilarity = graycoprops(glcm, 'dissimilarity').mean()
-            return contrast * 0.7 + dissimilarity * 0.3
+            return float(contrast * 0.7 + dissimilarity * 0.3)
         except Exception as e:
             print(f"图像处理错误: {str(e)}")
             return 0.0
@@ -153,7 +155,7 @@ def calculate_language_complexity(text, term_bank):
             w3 * term_ratio +
             w4 * sentence_length_factor
     )
-    return min(max(complex_word_ratio, 0.0), 1.0)
+    return float(min(max(complex_word_ratio, 0.0), 1.0))
 
 def calculate_formula_density(text):
     formula_pattern = re.compile(
@@ -187,7 +189,7 @@ def calculate_formula_density(text):
     raw_density = formula_score / normalized_text_length
     scaled_density = math.log(1 + raw_density)
     scaled_density = scaled_density / (1 + scaled_density)
-    return scaled_density
+    return float(scaled_density)
 
 def generate_ngrams(tokens, min_n, max_n):
     ngrams = set()
@@ -215,7 +217,7 @@ def calculate_knowledge_abstractness(text, term_bank):
     weighted_term_score = weighted_term_score / max(total_ngrams, 20)
     w1, w2 = 0.5, 0.5
     knowledge_abstractness = w1 * term_density + w2 * weighted_term_score
-    return min(max(knowledge_abstractness, 0.0), 1.0)
+    return float(min(max(knowledge_abstractness, 0.0), 1.0))
 
 def calculate_structure_disorder(text):
     section_patterns = [
@@ -238,7 +240,7 @@ def calculate_structure_disorder(text):
             jumpiness_factor * 0.5
     )
     final_score = round(max(0.1, min(structure_disorder, 1.0)), 2)
-    return final_score
+    return float(final_score)
 
 # ========================================
 # 📥 输入模块
@@ -250,28 +252,6 @@ class InputModule:
         self.score_data = self.load_scores(score_path)
         self.textbook_data = self.load_textbook(textbook_path)
 
-    # def load_cognitive_load(self, path):
-    #     try:
-    #         with open(path, 'r', encoding='utf-8') as f:
-    #             data = json.load(f)
-    #         df = pd.DataFrame(data)
-    #         if 'cognitive_load' not in df.columns or df['cognitive_load'].apply(lambda x: len(x) != 8).any():
-    #             raise ValueError("认知负荷数据格式错误：每个学生必须有 8 个评分")
-    #         df['has_valid_responses'] = df['cognitive_load'].apply(lambda x: any(v is not None for v in x))
-    #         if not df['has_valid_responses'].any():
-    #             print("警告：所有认知负荷数据均为 null，使用默认值")
-    #             df['cognitive_load_level'] = 'medium'
-    #             df['cognitive_load_score'] = 50.0
-    #         else:
-    #             df[['cognitive_load_level', 'cognitive_load_score']] = df['cognitive_load'].apply(self.calculate_cognitive_load).apply(pd.Series)
-    #         return df
-    #     except json.JSONDecodeError as e:
-    #         print(f"JSON 解析错误在文件 {path}: {str(e)}")
-    #         print(f"错误位置: 行 {e.lineno}, 列 {e.colno}, 字符 {e.pos}")
-    #         print(f"错误片段: {e.doc[max(0, e.pos-20):e.pos+20]}")
-    #         raise ValueError(f"加载认知负荷数据失败: JSON 格式错误 - {str(e)}")
-    #     except Exception as e:
-    #         raise ValueError(f"加载认知负荷数据失败: {str(e)}")
     def load_cognitive_load(self, path):
         try:
             with open(path, 'r', encoding='utf-8') as f:
@@ -378,13 +358,13 @@ class EvaluationModule:
             knowledge_abstraction = calculate_knowledge_abstractness(text, self.term_bank)
             structural_disorganization = calculate_structure_disorder(text)
             feature_dict = {
-                'linguistic_complexity': linguistic_complexity,
-                'formula_density': formula_density,
-                'diagram_complexity': diagram_complexity,
-                'knowledge_abstraction': knowledge_abstraction,
-                'structural_disorganization': structural_disorganization,
-                'formula_knowledge_interaction': formula_density * knowledge_abstraction,
-                'complex_knowledge_interaction': linguistic_complexity * knowledge_abstraction,
+                'linguistic_complexity': float(linguistic_complexity),
+                'formula_density': float(formula_density),
+                'diagram_complexity': float(diagram_complexity),
+                'knowledge_abstraction': float(knowledge_abstraction),
+                'structural_disorganization': float(structural_disorganization),
+                'formula_knowledge_interaction': float(formula_density * knowledge_abstraction),
+                'complex_knowledge_interaction': float(linguistic_complexity * knowledge_abstraction),
                 'has_formula': int(formula_density > 0),
                 'has_diagram': int(diagram_complexity > 0),
                 'has_structural_disorganization': int(structural_disorganization > 0)
@@ -432,8 +412,10 @@ class EvaluationModule:
         difficulty_scores = self.model.predict(X_std)
         all_zero_mask = np.all(X[:, :5] == 0, axis=1)
         difficulty_scores[all_zero_mask] = 1.0
-        features_df['difficulty_score'] = np.round(difficulty_scores, 1)
-        overall_difficulty = features_df['difficulty_score'].mean()
+        # 转换为 Python 原生类型
+        difficulty_scores = difficulty_scores.tolist() if isinstance(difficulty_scores, np.ndarray) else float(difficulty_scores)
+        features_df['difficulty_score'] = [round(float(score), 1) for score in difficulty_scores]
+        overall_difficulty = float(np.mean(difficulty_scores))
         return features_df, overall_difficulty
 
 # ========================================
@@ -452,7 +434,7 @@ class IRTOptimizedLearningAdaptation:
         b_mapped = self.b_mapped_min + \
                    (b_original - self.b_original_min) / (self.b_original_max - self.b_original_min) * \
                    (self.b_mapped_max - self.b_mapped_min)
-        return b_mapped
+        return float(b_mapped)
 
     def calculate_ability(self, score_level, score, cognitive_load_level, cognitive_load_score):
         if score < 50:
@@ -467,10 +449,10 @@ class IRTOptimizedLearningAdaptation:
         elif cognitive_load_level == 'low':
             theta_load = +1.0
         theta = theta_score + theta_load
-        return max(min(theta, 5.0), 1.0)
+        return float(max(min(theta, 5.0), 1.0))
 
     def calculate_probability(self, theta, b_mapped):
-        return 1 / (1 + np.exp(-self.D * self.a * (theta - b_mapped)))
+        return float(1 / (1 + np.exp(-self.D * self.a * (theta - b_mapped))))
 
     def adjust_difficulty(self, delta, P_theta):
         if delta >= 2.0 and P_theta < 0.12:
@@ -556,13 +538,19 @@ class TextbookDifficultySystem:
             "temperature": 0.7
         }
 
+        # 设置重试策略
+        session = requests.Session()
+        retries = Retry(total=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
+        session.mount('https://', HTTPAdapter(max_retries=retries))
+
         try:
-            resp = requests.post(self.qwen_endpoint, headers=headers, json=body, timeout=30)
+            resp = session.post(self.qwen_endpoint, headers=headers, json=body, timeout=60)
             resp.raise_for_status()
             resp_json = resp.json()
         except Exception as e:
             print(f"调用通义千问失败: {str(e)}")
-            return {"text": f"(生成失败) {str(e)}", "image_path": ""}
+            # 回退逻辑：返回原教材内容
+            return {"text": textbook_snippet, "image_path": ""}
 
         try:
             if 'choices' in resp_json and len(resp_json['choices']) > 0:
@@ -583,9 +571,23 @@ class TextbookDifficultySystem:
                 return {"text": json.dumps(resp_json, ensure_ascii=False), "image_path": ""}
         except Exception as e:
             print(f"解析通义千问响应失败: {str(e)}")
-            return {"text": "(解析响应失败)", "image_path": ""}
+            return {"text": textbook_snippet, "image_path": ""}
 
     def run(self, output_path=None):
+        # 转换 NumPy 类型为 Python 原生类型的函数
+        def convert_numpy_types(obj):
+            if isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, list):
+                return [convert_numpy_types(item) for item in obj]
+            elif isinstance(obj, dict):
+                return {key: convert_numpy_types(value) for key, value in obj.items()}
+            return obj
+
         student_data = pd.merge(
             self.input_module.cognitive_load_data[['student_id', 'cognitive_load_level', 'cognitive_load_score']],
             self.input_module.score_data[['student_id', 'score_level', 'score']],
@@ -604,14 +606,14 @@ class TextbookDifficultySystem:
             challenge = self.irt_olad.predict_optimal_challenge(theta, overall_difficulty_original)
             challenge['student_id'] = student['student_id']
             challenge['cognitive_load_level'] = student['cognitive_load_level']
-            challenge['cognitive_load_score'] = student['cognitive_load_score']
-            challenge['score'] = student['score']
+            challenge['cognitive_load_score'] = float(student['cognitive_load_score'])
+            challenge['score'] = float(student['score'])
             challenge['match_status'] = "匹配" if -1 <= challenge['delta'] <= 1 else ("需降低难度" if challenge['delta'] > 1 else "需提升挑战")
             results.append(challenge)
 
             new_textbook = self.generate_new_textbook(
                 textbook_snippet=textbook_data[0]['text'],
-                features=features_df.iloc[0].to_dict(),
+                features=convert_numpy_types(features_df.iloc[0].to_dict()),
                 theta=theta,
                 delta=challenge['delta'],
                 adjustment=challenge['adjustment'],
@@ -637,13 +639,13 @@ class TextbookDifficultySystem:
         })
 
         output_json = {
-            "textbook_features": features_df[[
+            "textbook_features": convert_numpy_types(features_df[[
                 'difficulty_score', 'linguistic_complexity', 'formula_density',
                 'diagram_complexity', 'knowledge_abstraction', 'structural_disorganization'
-            ]].to_dict(orient='records'),
-            "overall_difficulty": round(overall_difficulty_original, 2),
-            "students": result_df.to_dict(orient='records'),
-            "new_textbooks": new_textbooks
+            ]].to_dict(orient='records')),
+            "overall_difficulty": float(overall_difficulty_original),
+            "students": convert_numpy_types(result_df.to_dict(orient='records')),
+            "new_textbooks": convert_numpy_types(new_textbooks)
         }
 
         if output_path is None:
