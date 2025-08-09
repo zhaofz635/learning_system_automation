@@ -59,21 +59,21 @@ jobs:
           key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-nltk-
+
+      # 6. 安装 Python 依赖（对齐本地环境）
       - name: Install Python packages
         run: |
-          # 先安装兼容的 NumPy 版本
-          pip install "numpy<2.0.0" --no-cache-dir
-          
-          # 安装其他依赖（明确指定版本）
+          # 安装本地环境的依赖版本
           pip install --no-cache-dir \
+            numpy==2.0.2 \
             opencv-python-headless==4.8.0.76 \
-            nltk==3.7 \
-            pandas==1.5.3 \
-            scikit-learn==1.6.1
-            scikit-image==0.21.0 \
+            nltk==3.9.1 \
+            pandas==2.2.3 \
+            scikit-learn==1.6.1 \
+            scikit-image==0.24.0 \
             xgboost==2.1.4 \
-            "scipy<2.0.0" \
-            requests==2.31.0
+            scipy==1.13.1 \
+            requests==2.32.3
           
           # 验证安装
           python -c "
@@ -90,45 +90,20 @@ jobs:
               print(f'✅ Requests加载成功，版本: {requests.__version__}')
               import xgboost
               print(f'✅ XGBoost加载成功，版本: {xgboost.__version__}')
+              import sklearn
+              print(f'✅ Scikit-Learn加载成功，版本: {sklearn.__version__}')
+              import skimage
+              print(f'✅ Scikit-Image加载成功，版本: {skimage.__version__}')
+              import pandas
+              print(f'✅ Pandas加载成功，版本: {pandas.__version__}')
+              import scipy
+              print(f'✅ SciPy加载成功，版本: {scipy.__version__}')
+              import nltk
+              print(f'✅ NLTK加载成功，版本: {nltk.__version__}')
           except Exception as e:
               print(f'❌ 导入失败: {str(e)}')
               raise
           "
-      # # 6. 安装 Python 依赖（关键修复）
-      # - name: Install Python packages
-      #   run: |
-      #     # 先安装兼容的 NumPy 版本
-      #     pip install "numpy<2.0.0" --no-cache-dir
-          
-      #     # 安装其他依赖（明确指定版本）
-      #     pip install --no-cache-dir \
-      #       opencv-python-headless==4.8.0.76 \
-      #       nltk==3.7 \
-      #       pandas==1.5.3 \
-      #       scikit-learn==1.2.2 \
-      #       scikit-image==0.21.0 \
-      #       xgboost==1.7.6 \
-      #       "scipy<2.0.0" \
-      #       requests==2.31.0  # 新增 requests 模块
-            
-
-      #     # 验证安装
-      #     python -c "
-      #     import sys
-      #     print('Python路径:', sys.executable)
-      #     print('系统路径:', sys.path)
-          
-      #     try:
-      #         import numpy as np
-      #         print(f'NumPy版本: {np.__version__}')
-      #         import cv2
-      #         print(f'✅ OpenCV加载成功，版本: {cv2.__version__}')
-      #         import requests
-      #         print(f'✅ Requests加载成功，版本: {requests.__version__}')
-      #     except Exception as e:
-      #         print(f'❌ 导入失败: {str(e)}')
-      #         raise
-      #     "
 
       # 7. 设置 NLTK 环境
       - name: Setup NLTK
@@ -141,7 +116,7 @@ jobs:
           import nltk, os
           nltk.download('punkt', download_dir=os.environ['NLTK_DATA'], quiet=False)
           nltk.download('punkt_tab', download_dir=os.environ['NLTK_DATA'], quiet=False)
-          nltk.download('book', download_dir=os.environ['NLTK_DATA'], quiet=False)
+          nltk.download('stopwords', download_dir=os.environ['NLTK_DATA'], quiet=False)
           print('✅ 关键NLTK资源已下载')
           "
 
@@ -150,11 +125,13 @@ jobs:
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
           cat > input_data.json <<EOF
-          {
-            "student_id": "${{ inputs.student_id }}",
-            "score": ${{ inputs.score }},
-            "cognitive_load": [${cognitive_load_array// /,}]
-          }
+          [
+            {
+              "student_id": "${{ inputs.student_id }}",
+              "score": ${{ inputs.score }},
+              "cognitive_load": [${cognitive_load_array// /,}]
+            }
+          ]
           EOF
           echo "输入文件内容:"
           jq . input_data.json || cat input_data.json
@@ -167,11 +144,17 @@ jobs:
         run: |
           # 最终环境验证
           python -c "
-          import sys, numpy as np, cv2, requests
+          import sys, numpy as np, cv2, requests, xgboost, sklearn, skimage, pandas, scipy, nltk
           print(f'Python: {sys.version}')
           print(f'NumPy: {np.__version__}')
           print(f'OpenCV: {cv2.__version__}')
           print(f'Requests: {requests.__version__}')
+          print(f'XGBoost: {xgboost.__version__}')
+          print(f'Scikit-Learn: {sklearn.__version__}')
+          print(f'Scikit-Image: {skimage.__version__}')
+          print(f'Pandas: {pandas.__version__}')
+          print(f'SciPy: {scipy.__version__}')
+          print(f'NLTK: {nltk.__version__}')
           "
           
           # 带重试的运行机制
