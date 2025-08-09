@@ -272,7 +272,6 @@ class InputModule:
     #         raise ValueError(f"加载认知负荷数据失败: JSON 格式错误 - {str(e)}")
     #     except Exception as e:
     #         raise ValueError(f"加载认知负荷数据失败: {str(e)}")
-
     def load_cognitive_load(self, path):
         try:
             with open(path, 'r', encoding='utf-8') as f:
@@ -280,9 +279,11 @@ class InputModule:
                 content = f.read()
                 content = content.replace('，', ',')
                 data = json.loads(content)
-            # 检查是否为数组
-            if not isinstance(data, list):
-                raise ValueError(f"认知负荷数据必须为 JSON 数组，得到 {type(data)}")
+            # 如果 data 是 dict，转换为 list
+            if isinstance(data, dict):
+                data = [data]
+            elif not isinstance(data, list):
+                raise ValueError(f"认知负荷数据必须为 JSON 数组或对象，得到 {type(data)}")
             df = pd.DataFrame(data)
             if 'cognitive_load' not in df.columns:
                 raise ValueError("认知负荷数据缺少 'cognitive_load' 字段")
@@ -312,7 +313,6 @@ class InputModule:
             raise ValueError(f"加载认知负荷数据失败: JSON 格式错误 - {str(e)}")
         except Exception as e:
             raise ValueError(f"加载认知负荷数据失败: {str(e)}")
-
 
     def calculate_cognitive_load(self, cognitive_load):
         valid_responses = [r for r in cognitive_load if r is not None]
