@@ -129,7 +129,7 @@ jobs:
       # 9. 运行分析脚本
       - name: Run analysis
         env:
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
           NLTK_DATA: /tmp/nltk_data
         run: |
           # 验证输入文件存在
