@@ -17,26 +17,17 @@ from skimage.feature import graycomatrix, graycoprops
 # ========================================
 # 🔧 NLTK 路径与资源管理（关键修复）
 # ========================================
-
-# 定义与 GitHub Actions 一致的路径
 NLTK_DATA_PATH = '/tmp/nltk_data'
 
 def setup_nltk():
-    """确保 NLTK 能找到数据目录"""
-    # 优先使用环境变量
     custom_path = os.getenv('NLTK_DATA')
     if custom_path and custom_path not in nltk.data.path:
         nltk.data.path.insert(0, custom_path)
-    
-    # 添加默认路径
     if NLTK_DATA_PATH not in nltk.data.path:
         nltk.data.path.insert(0, NLTK_DATA_PATH)
-    
-    # 调试输出
     print("🔍 NLTK data search paths:", nltk.data.path)
 
 def download_nltk_resources():
-    """下载必要资源到指定目录"""
     try:
         nltk.data.find('tokenizers/punkt')
         print("✅ punkt 已存在")
@@ -51,14 +42,12 @@ def download_nltk_resources():
         print(f"📥 正在下载 stopwords 到 {NLTK_DATA_PATH}")
         nltk.download('stopwords', download_dir=NLTK_DATA_PATH, quiet=False)
 
-# 执行初始化
 setup_nltk()
 download_nltk_resources()
 
 # ========================================
 # 📚 术语库
 # ========================================
-
 class AcademicTermBank:
     def __init__(self, path="academic_terms.txt"):
         self.terms = self.load_terms(path)
@@ -76,7 +65,6 @@ class AcademicTermBank:
 # ========================================
 # 🖼️ 表格/图像复杂度分析器
 # ========================================
-
 class TableComplexityAnalyzer:
     def __init__(self, weight_structured=0.6, weight_image=0.4):
         self.weights = {'structured': weight_structured, 'image': weight_image}
@@ -126,8 +114,10 @@ class TableComplexityAnalyzer:
                 return 0.0
             img = cv2.resize(img, (256, 256))
             img_eq = cv2.equalizeHist(img)
-            img_bin = cv2.adaptiveThreshold(img_eq, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
-            glcm = graycomatrix(img_bin, distances=[3, 5], angles=[0, np.pi/4, np.pi/2, 3*np.pi/4],
+            img_bin = cv2.adaptiveThreshold(img_eq, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                            cv2.THRESH_BINARY_INV, 11, 2)
+            glcm = graycomatrix(img_bin, distances=[3, 5],
+                                angles=[0, np.pi/4, np.pi/2, 3*np.pi/4],
                                 levels=256, symmetric=True, normed=True)
             contrast = graycoprops(glcm, 'contrast').mean()
             dissimilarity = graycoprops(glcm, 'dissimilarity').mean()
@@ -139,7 +129,6 @@ class TableComplexityAnalyzer:
 # ========================================
 # 📊 计算各项复杂度
 # ========================================
-
 def calculate_language_complexity(text, term_bank):
     words = word_tokenize(text)
     sentences = sent_tokenize(text)
@@ -254,7 +243,6 @@ def calculate_structure_disorder(text):
 # ========================================
 # 📥 输入模块
 # ========================================
-
 class InputModule:
     def __init__(self, cognitive_load_path, score_path, textbook_path, term_bank_path="academic_terms.txt"):
         self.term_bank = AcademicTermBank(term_bank_path)
@@ -326,7 +314,6 @@ class InputModule:
 # ========================================
 # 🧠 评估模块
 # ========================================
-
 class EvaluationModule:
     def __init__(self, model_path='best_model_xgb.pkl', scaler_path='scaler.pkl', weights_path='weights_xgb.pkl'):
         self.model = joblib.load(model_path)
@@ -380,8 +367,11 @@ class EvaluationModule:
             print("警告：特征包含缺失值，使用中位数填充")
             for i in range(X.shape[1]):
                 X[:, i] = np.where(np.isnan(X[:, i]), np.nanmedian(X[:, i]), X[:, i])
-        formula_idx_model = feature_names_model_order.index('formula_density')
-        X[:, formula_idx_model] = np.log1p(X[:, formula_idx_model])
+        try:
+            formula_idx_model = feature_names_model_order.index('formula_density')
+            X[:, formula_idx_model] = np.log1p(X[:, formula_idx_model])
+        except ValueError:
+            pass
         table_idx_model = feature_names_model_order.index('table_complexity')
         bins = self.weights_info.get('table_complexity_bins', [0, 0.1, 0.5, 1.0, 2.0])
         cut_result = pd.cut(X[:, table_idx_model], bins=bins, labels=False, include_lowest=True)
@@ -403,7 +393,6 @@ class EvaluationModule:
 # ========================================
 # 🎯 IRT 自适应调节
 # ========================================
-
 class IRTOptimizedLearningAdaptation:
     def __init__(self):
         self.D = 1.702
@@ -467,61 +456,88 @@ class IRTOptimizedLearningAdaptation:
         }
 
 # ========================================
-# 📚 主系统
+# 📚 主系统（使用 ACCESS_KEY_SECRET 环境变量或命令行参数）
 # ========================================
-
 class TextbookDifficultySystem:
     def __init__(self, cognitive_load_path, score_path, textbook_path, model_path='best_model_xgb.pkl',
                  scaler_path='scaler.pkl', weights_path='weights_xgb.pkl', term_bank_path='academic_terms.txt',
-                 minimax_api_key=None):
+                 access_key_secret=None, qwen_model='qwen-plus'):
         self.input_module = InputModule(cognitive_load_path, score_path, textbook_path, term_bank_path)
         self.evaluation_module = EvaluationModule(model_path, scaler_path, weights_path)
         self.irt_olad = IRTOptimizedLearningAdaptation()
-        self.minimax_api_key = minimax_api_key or "your_minimax_api_key"
+
+        # 优先使用传入参数 access_key_secret，再读取环境变量 ACCESS_KEY_SECRET，然后尝试 QWEN_API_KEY
+        self.access_key_secret = access_key_secret or os.getenv('ACCESS_KEY_SECRET') or os.getenv('QWEN_API_KEY')
+        if not self.access_key_secret:
+            raise ValueError("未提供通义千问 API 密钥，请设置环境变量 ACCESS_KEY_SECRET 或通过 --ACCESS_KEY_SECRET 提供")
+        self.qwen_endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+        self.qwen_model = qwen_model
 
     def generate_new_textbook(self, textbook_snippet, features, theta, delta, adjustment, suggestion):
         prompt = f"""
-        你是一个教育机器人，任务是生成与学生能力匹配的个性化教材内容。基于以下信息：
-        - 原教材内容：{textbook_snippet}
-        - 五维难易度分数：
-          - 语言复杂性：{features['linguistic_complexity']}
-          - 公式密度：{features['formula_density']}
-          - 视觉复杂性：{features['diagram_complexity']}
-          - 知识抽象度：{features['knowledge_abstraction']}
-          - 结构无序度：{features['structural_disorganization']}
-          - 综合难度：{features['difficulty_score']}
-        - 学生能力（θ）：{theta}
-        - 能力与难度差值（Δ）：{delta}
-        - 调整策略：{suggestion}
-        生成一个新的教材片段（约100-200字），与原教材主题相关，格式为JSON：
-        {{
-          "text": "新教材内容",
-          "image_path": ""
-        }}
-        规则：
-        - 如果Δ≥2（significant_downgrade）：简化语言（避免术语），移除公式，降低抽象度。
-        - 如果1≤Δ<2（moderate_downgrade）：使用简单措辞，增加1-2个示例，减少公式。
-        - 如果-1≤Δ<1（maintain）：保持难度，优化结构，添加清晰标题。
-        - 如果Δ<-1（upgrade）：增加抽象概念，引入1个简单公式，保持清晰结构。
-        - 如果公式密度>0.3，减少公式；如果语言复杂性>0.5，简化措辞；如果知识抽象度>0.4，减少抽象术语。
-        """
+你是一个教育机器人，任务是生成与学生能力匹配的个性化教材内容。基于以下信息：
+- 原教材内容：{textbook_snippet}
+- 五维难易度分数：
+  - 语言复杂性：{features.get('linguistic_complexity')}
+  - 公式密度：{features.get('formula_density')}
+  - 视觉复杂性：{features.get('diagram_complexity')}
+  - 知识抽象度：{features.get('knowledge_abstraction')}
+  - 结构无序度：{features.get('structural_disorganization')}
+  - 综合难度：{features.get('difficulty_score')}
+- 学生能力（θ）：{theta}
+- 能力与难度差值（Δ）：{delta}
+- 调整策略：{suggestion}
+生成一个新的教材片段（约100-200字），与原教材主题相关，格式为JSON：
+{{
+  "text": "新教材内容",
+  "image_path": ""
+}}
+规则：
+- 如果Δ≥2（significant_downgrade）：简化语言（避免术语），移除公式，降低抽象度。
+- 如果1≤Δ<2（moderate_downgrade）：使用简单措辞，增加1-2个示例，减少公式。
+- 如果-1≤Δ<1（maintain）：保持难度，优化结构，添加清晰标题。
+- 如果Δ<-1（upgrade）：增加抽象概念，引入1个简单公式，保持清晰结构。
+- 如果公式密度>0.3，减少公式；如果语言复杂性>0.5，简化措辞；如果知识抽象度>0.4，减少抽象术语。
+"""
         headers = {
-            "Authorization": f"Bearer {self.minimax_api_key}",
+            "Authorization": f"Bearer {self.access_key_secret}",
             "Content-Type": "application/json"
         }
-        data = {
-            "model": "abab6.5s-chat",
+        body = {
+            "model": self.qwen_model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 500,
             "temperature": 0.7
         }
-        response = requests.post("https://api.minimax.chat/v1/text/chatcompletion", headers=headers, json=data)
-        response_data = response.json()
+
         try:
-            new_textbook = json.loads(response_data['choices'][0]['message']['content'])
-        except:
-            new_textbook = {"text": response_data['choices'][0]['message']['content'], "image_path": ""}
-        return new_textbook
+            resp = requests.post(self.qwen_endpoint, headers=headers, json=body, timeout=30)
+            resp.raise_for_status()
+            resp_json = resp.json()
+        except Exception as e:
+            print(f"调用通义千问失败: {str(e)}")
+            return {"text": f"(生成失败) {str(e)}", "image_path": ""}
+
+        try:
+            if 'choices' in resp_json and len(resp_json['choices']) > 0:
+                message_content = resp_json['choices'][0].get('message', {}).get('content') or resp_json['choices'][0].get('text')
+                if not message_content:
+                    message_content = json.dumps(resp_json)
+                try:
+                    new_textbook = json.loads(message_content)
+                except Exception:
+                    new_textbook = {"text": message_content, "image_path": ""}
+                return new_textbook
+            else:
+                if 'text' in resp_json:
+                    try:
+                        return json.loads(resp_json['text'])
+                    except Exception:
+                        return {"text": resp_json['text'], "image_path": ""}
+                return {"text": json.dumps(resp_json, ensure_ascii=False), "image_path": ""}
+        except Exception as e:
+            print(f"解析通义千问响应失败: {str(e)}")
+            return {"text": "(解析响应失败)", "image_path": ""}
 
     def run(self, output_path=None):
         student_data = pd.merge(
@@ -604,7 +620,9 @@ if __name__ == "__main__":
     parser.add_argument('--scaler', type=str, default='scaler.pkl', help="标准化器路径")
     parser.add_argument('--weights', type=str, default='weights_xgb.pkl', help="权重文件路径")
     parser.add_argument('--term_bank', type=str, default='academic_terms.txt', help="术语库文件路径")
-    parser.add_argument('--minimax_api_key', type=str, required=True, help="MiniMax API 密钥")
+    # 采用大写参数名以匹配你在 yml 中的 args.ACCESS_KEY_SECRET 要求（也可不传，脚本会读环境变量）
+    parser.add_argument('--ACCESS_KEY_SECRET', type=str, default=None, help="通义千问 API 密钥（优先使用该参数，否则使用环境变量 ACCESS_KEY_SECRET）")
+    parser.add_argument('--qwen_model', type=str, default='qwen-plus', help="通义千问模型名（OpenAI 兼容模式下）")
     args = parser.parse_args()
 
     system = TextbookDifficultySystem(
@@ -615,7 +633,8 @@ if __name__ == "__main__":
         scaler_path=args.scaler,
         weights_path=args.weights,
         term_bank_path=args.term_bank,
-        minimax_api_key=args.minimax_api_key
+        access_key_secret=args.ACCESS_KEY_SECRET,
+        qwen_model=args.qwen_model
     )
     result = system.run(args.output)
     print(json.dumps(result, indent=2, ensure_ascii=False))
