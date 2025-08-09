@@ -255,21 +255,26 @@ class InputModule:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             df = pd.DataFrame(data)
-            if 'responses' not in df.columns or df['responses'].apply(lambda x: len(x) != 8).any():
+            if 'cognitive_load' not in df.columns or df['cognitive_load'].apply(lambda x: len(x) != 8).any():
                 raise ValueError("认知负荷数据格式错误：每个学生必须有 8 个评分")
-            df['has_valid_responses'] = df['responses'].apply(lambda x: any(v is not None for v in x))
+            df['has_valid_responses'] = df['cognitive_load'].apply(lambda x: any(v is not None for v in x))
             if not df['has_valid_responses'].any():
                 print("警告：所有认知负荷数据均为 null，使用默认值")
                 df['cognitive_load_level'] = 'medium'
                 df['cognitive_load_score'] = 50.0
             else:
-                df[['cognitive_load_level', 'cognitive_load_score']] = df['responses'].apply(self.calculate_cognitive_load).apply(pd.Series)
+                df[['cognitive_load_level', 'cognitive_load_score']] = df['cognitive_load'].apply(self.calculate_cognitive_load).apply(pd.Series)
             return df
+        except json.JSONDecodeError as e:
+            print(f"JSON 解析错误在文件 {path}: {str(e)}")
+            print(f"错误位置: 行 {e.lineno}, 列 {e.colno}, 字符 {e.pos}")
+            print(f"错误片段: {e.doc[max(0, e.pos-20):e.pos+20]}")
+            raise ValueError(f"加载认知负荷数据失败: JSON 格式错误 - {str(e)}")
         except Exception as e:
             raise ValueError(f"加载认知负荷数据失败: {str(e)}")
 
-    def calculate_cognitive_load(self, responses):
-        valid_responses = [r for r in responses if r is not None]
+    def calculate_cognitive_load(self, cognitive_load):
+        valid_responses = [r for r in cognitive_load if r is not None]
         if not valid_responses:
             return pd.Series(['medium', 50.0])
         total_score = sum(valid_responses)
@@ -620,7 +625,6 @@ if __name__ == "__main__":
     parser.add_argument('--scaler', type=str, default='scaler.pkl', help="标准化器路径")
     parser.add_argument('--weights', type=str, default='weights_xgb.pkl', help="权重文件路径")
     parser.add_argument('--term_bank', type=str, default='academic_terms.txt', help="术语库文件路径")
-    # 采用大写参数名以匹配你在 yml 中的 args.ACCESS_KEY_SECRET 要求（也可不传，脚本会读环境变量）
     parser.add_argument('--ACCESS_KEY_SECRET', type=str, default=None, help="通义千问 API 密钥（优先使用该参数，否则使用环境变量 ACCESS_KEY_SECRET）")
     parser.add_argument('--qwen_model', type=str, default='qwen-plus', help="通义千问模型名（OpenAI 兼容模式下）")
     args = parser.parse_args()
