@@ -65,7 +65,7 @@ jobs:
         run: |
           # 安装本地环境的依赖版本
           pip install --no-cache-dir \
-            numpy==2.0.2 \
+            numpy==1.26.4 \
             opencv-python-headless==4.8.0.76 \
             nltk==3.9.1 \
             pandas==2.2.3 \
