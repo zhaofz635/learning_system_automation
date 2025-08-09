@@ -60,16 +60,16 @@ jobs:
           mkdir -p /tmp/nltk_data
           echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
           python -c "
-import nltk
-import os
-nltk.data.path.append(os.environ['NLTK_DATA'])
-nltk.download('punkt', download_dir=os.environ['NLTK_DATA'])
-nltk.download('averaged_perceptron_tagger', download_dir=os.environ['NLTK_DATA'])
-nltk.download('stopwords', download_dir=os.environ['NLTK_DATA'])
-nltk.download('wordnet', download_dir=os.environ['NLTK_DATA'])
-nltk.download('book', download_dir=os.environ['NLTK_DATA'])
-print('✅ NLTK resources downloaded')
-"
+          import nltk
+          import os
+          nltk.data.path.append(os.environ['NLTK_DATA'])
+          nltk.download('punkt', download_dir=os.environ['NLTK_DATA'])
+          nltk.download('averaged_perceptron_tagger', download_dir=os.environ['NLTK_DATA'])
+          nltk.download('stopwords', download_dir=os.environ['NLTK_DATA'])
+          nltk.download('wordnet', download_dir=os.environ['NLTK_DATA'])
+          nltk.download('book', download_dir=os.environ['NLTK_DATA'])
+          print('✅ NLTK resources downloaded')
+          "
 
       - name: Prepare input files
         run: |
