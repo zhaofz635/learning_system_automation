@@ -1,7 +1,9 @@
-pandas
-numpy
-scikit-learn
-xgboost
-requests
-nltk
-cv2
+numpy<2.0.0
+opencv-python-headless==4.8.0.76
+nltk==3.7
+pandas==1.5.3
+scikit-learn==1.2.2
+xgboost==1.7.6
+scipy<2.0.0
+requests==2.31.0
+scikit-image==0.21.0
