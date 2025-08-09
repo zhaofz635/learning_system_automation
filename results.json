@@ -100,23 +100,23 @@
   "overall_difficulty": 4.424641907215118,
   "students": [
     {
-      "student_id": "6",
-      "cognitive_load_level": "high",
-      "认知负荷得分": 175.0,
-      "score": 6.0,
+      "student_id": "4",
+      "cognitive_load_level": "medium",
+      "认知负荷得分": 50.0,
+      "score": 1.0,
       "教材难易度": 2.52,
-      "Δ范围": 1.52,
-      "P(θ)区间": 0.01,
-      "调节等级": "slight_downgrade",
-      "操作建议": "略微降低语言复杂度，增加辅助说明",
-      "匹配状态": "需降低难度"
+      "Δ范围": 0.52,
+      "P(θ)区间": 0.18,
+      "调节等级": "slight_adjust",
+      "操作建议": "微调内容结构，保持现有难度",
+      "匹配状态": "匹配"
     }
   ],
   "new_textbooks": [
     {
-      "student_id": "6",
+      "student_id": "4",
       "new_textbook": {
-        "text": "```json\n{\n  \"text\": \"大型语言模型（LLMs）在生成和翻译文本方面表现突出。它们的核心技术基于一种叫做Transformer的结构，像BERT和GPT-4这样的模型就使用了这种结构。Transformer模型中有一个叫做‘注意力机制’的组件，它帮助模型更快更准确地理解长段文字。训练这些模型需要大量计算资源，复杂度与文本长度和模型维度有关。虽然这些模型很强大，但在技术、伦理和实际应用方面仍面临许多挑战。\",\n  \"image_path\": \"\"\n}\n```",
+        "text": "1. Large Language Models: Challenges\n1.1 Overview: Large Language Models (LLMs) advance text generation and translation.\n1.1.1 Models: BERT and GPT-4 use Transformer architectures.\n1.1.2 Mechanisms: Attention mechanisms process sequences efficiently.\n1.2 Complexity: Training complexity is $C(n, d) = O(n^2 d)$.\n1.2.1 Parameters: Here, $n$ is sequence length, $d$ is dimension.\n1.3 Scope: This covers technical, ethical, and application challenges.",
         "image_path": ""
       }
     }
