@@ -59,8 +59,6 @@ jobs:
           key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-nltk-
-
-      # 6. 安装 Python 依赖（关键修复）
       - name: Install Python packages
         run: |
           # 先安装兼容的 NumPy 版本
@@ -73,11 +71,10 @@ jobs:
             pandas==1.5.3 \
             scikit-learn==1.2.2 \
             scikit-image==0.21.0 \
-            xgboost==1.7.6 \
+            xgboost==2.1.4 \
             "scipy<2.0.0" \
-            requests==2.31.0  # 新增 requests 模块
-            
-
+            requests==2.31.0
+          
           # 验证安装
           python -c "
           import sys
@@ -91,10 +88,47 @@ jobs:
               print(f'✅ OpenCV加载成功，版本: {cv2.__version__}')
               import requests
               print(f'✅ Requests加载成功，版本: {requests.__version__}')
+              import xgboost
+              print(f'✅ XGBoost加载成功，版本: {xgboost.__version__}')
           except Exception as e:
               print(f'❌ 导入失败: {str(e)}')
               raise
           "
+      # # 6. 安装 Python 依赖（关键修复）
+      # - name: Install Python packages
+      #   run: |
+      #     # 先安装兼容的 NumPy 版本
+      #     pip install "numpy<2.0.0" --no-cache-dir
+          
+      #     # 安装其他依赖（明确指定版本）
+      #     pip install --no-cache-dir \
+      #       opencv-python-headless==4.8.0.76 \
+      #       nltk==3.7 \
+      #       pandas==1.5.3 \
+      #       scikit-learn==1.2.2 \
+      #       scikit-image==0.21.0 \
+      #       xgboost==1.7.6 \
+      #       "scipy<2.0.0" \
+      #       requests==2.31.0  # 新增 requests 模块
+            
+
+      #     # 验证安装
+      #     python -c "
+      #     import sys
+      #     print('Python路径:', sys.executable)
+      #     print('系统路径:', sys.path)
+          
+      #     try:
+      #         import numpy as np
+      #         print(f'NumPy版本: {np.__version__}')
+      #         import cv2
+      #         print(f'✅ OpenCV加载成功，版本: {cv2.__version__}')
+      #         import requests
+      #         print(f'✅ Requests加载成功，版本: {requests.__version__}')
+      #     except Exception as e:
+      #         print(f'❌ 导入失败: {str(e)}')
+      #         raise
+      #     "
 
       # 7. 设置 NLTK 环境
       - name: Setup NLTK
