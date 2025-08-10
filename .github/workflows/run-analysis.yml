@@ -8,13 +8,18 @@ on:
         required: true
         type: string
       score:
-        description: '测试成绩 (0-5分)'
+        description: '测试成绩 (0-100分)'
         required: true
         type: string
       cognitive_load:
-        description: '认知负荷评分 (1-5分，逗号分隔)'
+        description: '认知负荷评分 (1-5分，逗号分隔，8个值)'
         required: true
         type: string
+      user_feedback:
+        description: '学生反馈 (如"我觉得太难")'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   analyze:
@@ -60,52 +65,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nltk-
 
-      # # 6. 安装 Python 依赖（对齐本地环境）
-      # - name: Install Python packages
-      #   run: |
-      #     # 安装本地环境的依赖版本
-      #     pip install --no-cache-dir \
-      #       numpy==1.26.4 \
-      #       opencv-python-headless==4.8.0.76 \
-      #       nltk==3.9.1 \
-      #       pandas==2.2.3 \
-      #       scikit-learn==1.6.1 \
-      #       scikit-image==0.24.0 \
-      #       xgboost==2.1.4 \
-      #       scipy==1.13.1 \
-      #       requests==2.32.3
-          
-      #     # 验证安装
-      #     python -c "
-      #     import sys
-      #     print('Python路径:', sys.executable)
-      #     print('系统路径:', sys.path)
-          
-      #     try:
-      #         import numpy as np
-      #         print(f'NumPy版本: {np.__version__}')
-      #         import cv2
-      #         print(f'✅ OpenCV加载成功，版本: {cv2.__version__}')
-      #         import requests
-      #         print(f'✅ Requests加载成功，版本: {requests.__version__}')
-      #         import xgboost
-      #         print(f'✅ XGBoost加载成功，版本: {xgboost.__version__}')
-      #         import sklearn
-      #         print(f'✅ Scikit-Learn加载成功，版本: {sklearn.__version__}')
-      #         import skimage
-      #         print(f'✅ Scikit-Image加载成功，版本: {skimage.__version__}')
-      #         import pandas
-      #         print(f'✅ Pandas加载成功，版本: {pandas.__version__}')
-      #         import scipy
-      #         print(f'✅ SciPy加载成功，版本: {scipy.__version__}')
-      #         import nltk
-      #         print(f'✅ NLTK加载成功，版本: {nltk.__version__}')
-      #     except Exception as e:
-      #         print(f'❌ 导入失败: {str(e)}')
-      #         raise
-      #     "
-
-      # 6. 安装 Python 依赖（对齐本地环境）
+      # 6. 安装 Python 依赖
       - name: Install Python packages
         run: |
           pip install -r requirements.txt
@@ -140,7 +100,6 @@ jobs:
               raise
           "
 
-
       # 7. 设置 NLTK 环境
       - name: Setup NLTK
         run: |
@@ -165,7 +124,8 @@ jobs:
             {
               "student_id": "${{ inputs.student_id }}",
               "score": ${{ inputs.score }},
-              "cognitive_load": [${cognitive_load_array// /,}]
+              "cognitive_load": [${cognitive_load_array// /,}],
+              "user_feedback": "${{ inputs.user_feedback }}"
             }
           ]
           EOF
@@ -215,16 +175,6 @@ jobs:
           echo "分析结果:"
           jq . results.json || cat results.json
 
-      # # 10. 提交结果
-      # - name: Commit results
-      #   run: |
-      #     git config --global user.name "GitHub Actions"
-      #     git config --global user.email "actions@github.com"
-      #     git add results.json
-      #     git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
-      #     remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
-      #     git push "${remote_repo}" HEAD:${GITHUB_REF} || exit 0
-
       # 10. 提交结果
       - name: Commit results
         run: |
@@ -235,7 +185,6 @@ jobs:
           git pull --rebase origin main
           remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
           git push "${remote_repo}" HEAD:main || exit 0
-
 
       # 11. 上传到 Google Sheets
       - name: Upload to Google Sheets
