@@ -279,6 +279,8 @@ class InputModule:
                 return True
             df['cognitive_load'].apply(validate_cognitive_load)
             df['has_valid_responses'] = df['cognitive_load'].apply(lambda x: any(v is not None for v in x))
+            # 新增：提取 user_feedback
+            df['user_feedback'] = df.get('user_feedback', '')
             if not df['has_valid_responses'].any():
                 print("警告：所有认知负荷数据均为 null，使用默认值")
                 df['cognitive_load_level'] = 'medium'
@@ -503,7 +505,7 @@ class TextbookDifficultySystem:
 
     def generate_new_textbook(self, textbook_snippet, features, theta, delta, adjustment, suggestion):
         prompt = f"""
-你是一个教育机器人，任务是生成与学生能力匹配的个性化教材内容。基于以下信息：
+你是一个教育机器人，任务是生成与学生能力匹配的个性化教材内容，并根据学生反馈进行对话式引导。基于以下信息：
 - 原教材内容：{textbook_snippet}
 - 五维难易度分数：
   - 语言复杂性：{features.get('linguistic_complexity')}
@@ -515,17 +517,17 @@ class TextbookDifficultySystem:
 - 学生能力（θ）：{theta}
 - 能力与难度差值（Δ）：{delta}
 - 调整策略：{suggestion}
+- 学生反馈：{user_feedback}
 生成一个新的教材片段（约100-200字），与原教材主题相关，格式为JSON：
 {{
   "text": "新教材内容",
   "image_path": ""
 }}
 规则：
-- 如果Δ≥2（significant_downgrade）：简化语言（避免术语），移除公式，降低抽象度。
-- 如果1≤Δ<2（moderate_downgrade）：使用简单措辞，增加1-2个示例，减少公式。
-- 如果-1≤Δ<1（maintain）：保持难度，优化结构，添加清晰标题。
-- 如果Δ<-1（upgrade）：增加抽象概念，引入1个简单公式，保持清晰结构。
-- 如果公式密度>0.3，减少公式；如果语言复杂性>0.5，简化措辞；如果知识抽象度>0.4，减少抽象术语。
+- 保持ZPD公式结果（θ、Δ、P(θ)）不变，仅基于调整策略（{adjustment}）修改内容。
+- 若反馈表示“太难”（如包含“难”“复杂”），建议简化语言或公式，增加示例；若“太易”，增加挑战但保持清晰。
+- 若反馈偏离主题（如“我讨厌数学”），温和重定向，如“理解你的感受，我们来优化内容让你更轻松”。
+- 确保新教材与原主题一致，清晰可解释。
 """
         headers = {
             "Authorization": f"Bearer {self.access_key_secret}",
@@ -572,9 +574,8 @@ class TextbookDifficultySystem:
         except Exception as e:
             print(f"解析通义千问响应失败: {str(e)}")
             return {"text": textbook_snippet, "image_path": ""}
-
+    # 更新 run 方法以传递 user_feedback
     def run(self, output_path=None):
-        # 转换 NumPy 类型为 Python 原生类型的函数
         def convert_numpy_types(obj):
             if isinstance(obj, np.floating):
                 return float(obj)
@@ -587,15 +588,15 @@ class TextbookDifficultySystem:
             elif isinstance(obj, dict):
                 return {key: convert_numpy_types(value) for key, value in obj.items()}
             return obj
-
+    
         student_data = pd.merge(
-            self.input_module.cognitive_load_data[['student_id', 'cognitive_load_level', 'cognitive_load_score']],
+            self.input_module.cognitive_load_data[['student_id', 'cognitive_load_level', 'cognitive_load_score', 'user_feedback']],
             self.input_module.score_data[['student_id', 'score_level', 'score']],
             on='student_id'
         )
         textbook_data = self.input_module.textbook_data
         features_df, overall_difficulty_original = self.evaluation_module.evaluate_textbook_difficulty(textbook_data)
-
+    
         results = []
         new_textbooks = []
         for _, student in student_data.iterrows():
@@ -610,20 +611,21 @@ class TextbookDifficultySystem:
             challenge['score'] = float(student['score'])
             challenge['match_status'] = "匹配" if -1 <= challenge['delta'] <= 1 else ("需降低难度" if challenge['delta'] > 1 else "需提升挑战")
             results.append(challenge)
-
+    
             new_textbook = self.generate_new_textbook(
                 textbook_snippet=textbook_data[0]['text'],
                 features=convert_numpy_types(features_df.iloc[0].to_dict()),
                 theta=theta,
                 delta=challenge['delta'],
                 adjustment=challenge['adjustment'],
-                suggestion=challenge['suggestion']
+                suggestion=challenge['suggestion'],
+                user_feedback=student['user_feedback']
             )
             new_textbooks.append({
                 'student_id': student['student_id'],
                 'new_textbook': new_textbook
             })
-
+    
         result_df = pd.DataFrame(results)
         result_df = result_df[[
             'student_id', 'cognitive_load_level', 'cognitive_load_score', 'score',
@@ -637,7 +639,7 @@ class TextbookDifficultySystem:
             'cognitive_load_score': '认知负荷得分',
             'match_status': '匹配状态'
         })
-
+    
         output_json = {
             "textbook_features": convert_numpy_types(features_df[[
                 'difficulty_score', 'linguistic_complexity', 'formula_density',
@@ -647,15 +649,98 @@ class TextbookDifficultySystem:
             "students": convert_numpy_types(result_df.to_dict(orient='records')),
             "new_textbooks": convert_numpy_types(new_textbooks)
         }
-
+    
         if output_path is None:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             output_path = f'results_{timestamp}.json'
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(output_json, f, ensure_ascii=False, indent=2)
         print(f"结果已保存至 {output_path}")
-
+    
         return output_json
+    # def run(self, output_path=None):
+    #     # 转换 NumPy 类型为 Python 原生类型的函数
+    #     def convert_numpy_types(obj):
+    #         if isinstance(obj, np.floating):
+    #             return float(obj)
+    #         elif isinstance(obj, np.integer):
+    #             return int(obj)
+    #         elif isinstance(obj, np.ndarray):
+    #             return obj.tolist()
+    #         elif isinstance(obj, list):
+    #             return [convert_numpy_types(item) for item in obj]
+    #         elif isinstance(obj, dict):
+    #             return {key: convert_numpy_types(value) for key, value in obj.items()}
+    #         return obj
+
+    #     student_data = pd.merge(
+    #         self.input_module.cognitive_load_data[['student_id', 'cognitive_load_level', 'cognitive_load_score']],
+    #         self.input_module.score_data[['student_id', 'score_level', 'score']],
+    #         on='student_id'
+    #     )
+    #     textbook_data = self.input_module.textbook_data
+    #     features_df, overall_difficulty_original = self.evaluation_module.evaluate_textbook_difficulty(textbook_data)
+
+    #     results = []
+    #     new_textbooks = []
+    #     for _, student in student_data.iterrows():
+    #         theta = self.irt_olad.calculate_ability(
+    #             student['score_level'], student['score'],
+    #             student['cognitive_load_level'], student['cognitive_load_score']
+    #         )
+    #         challenge = self.irt_olad.predict_optimal_challenge(theta, overall_difficulty_original)
+    #         challenge['student_id'] = student['student_id']
+    #         challenge['cognitive_load_level'] = student['cognitive_load_level']
+    #         challenge['cognitive_load_score'] = float(student['cognitive_load_score'])
+    #         challenge['score'] = float(student['score'])
+    #         challenge['match_status'] = "匹配" if -1 <= challenge['delta'] <= 1 else ("需降低难度" if challenge['delta'] > 1 else "需提升挑战")
+    #         results.append(challenge)
+
+    #         new_textbook = self.generate_new_textbook(
+    #             textbook_snippet=textbook_data[0]['text'],
+    #             features=convert_numpy_types(features_df.iloc[0].to_dict()),
+    #             theta=theta,
+    #             delta=challenge['delta'],
+    #             adjustment=challenge['adjustment'],
+    #             suggestion=challenge['suggestion']
+    #         )
+    #         new_textbooks.append({
+    #             'student_id': student['student_id'],
+    #             'new_textbook': new_textbook
+    #         })
+
+    #     result_df = pd.DataFrame(results)
+    #     result_df = result_df[[
+    #         'student_id', 'cognitive_load_level', 'cognitive_load_score', 'score',
+    #         'difficulty_score', 'delta', 'P_theta', 'adjustment', 'suggestion', 'match_status'
+    #     ]].rename(columns={
+    #         'difficulty_score': '教材难易度',
+    #         'delta': 'Δ范围',
+    #         'P_theta': 'P(θ)区间',
+    #         'adjustment': '调节等级',
+    #         'suggestion': '操作建议',
+    #         'cognitive_load_score': '认知负荷得分',
+    #         'match_status': '匹配状态'
+    #     })
+
+    #     output_json = {
+    #         "textbook_features": convert_numpy_types(features_df[[
+    #             'difficulty_score', 'linguistic_complexity', 'formula_density',
+    #             'diagram_complexity', 'knowledge_abstraction', 'structural_disorganization'
+    #         ]].to_dict(orient='records')),
+    #         "overall_difficulty": float(overall_difficulty_original),
+    #         "students": convert_numpy_types(result_df.to_dict(orient='records')),
+    #         "new_textbooks": convert_numpy_types(new_textbooks)
+    #     }
+
+    #     if output_path is None:
+    #         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    #         output_path = f'results_{timestamp}.json'
+    #     with open(output_path, 'w', encoding='utf-8') as f:
+    #         json.dump(output_json, f, ensure_ascii=False, indent=2)
+    #     print(f"结果已保存至 {output_path}")
+
+    #     return output_json
 
 if __name__ == "__main__":
     import argparse
