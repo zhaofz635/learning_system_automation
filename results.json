@@ -116,7 +116,7 @@
     {
       "student_id": "4",
       "new_textbook": {
-        "text": "大型语言模型（LLMs）在文本生成和翻译方面取得了显著进展。它们的核心机制基于Transformer架构，如BERT和GPT-4。你能想到，这种架构如何帮助模型理解长段文字？注意机制是关键——它让模型在处理信息时关注最相关的部分。例如，当你读一句话时，你不会逐字记忆，而是抓住重点词来理解整体意思。这在计算上也带来挑战，尤其是随着文本长度增加，计算复杂度迅速上升。你能尝试举例说明，为什么长文本可能导致模型训练更困难吗？",
+        "text": "1. Large Language Models: Challenges\n1.1 Overview: Large Language Models (LLMs) advance text generation and translation.\n1.1.1 Models: BERT and GPT-4 use Transformer architectures.\n1.1.2 Mechanisms: Attention mechanisms process sequences efficiently.\n1.2 Complexity: Training complexity is $C(n, d) = O(n^2 d)$.\n1.2.1 Parameters: Here, $n$ is sequence length, $d$ is dimension.\n1.3 Scope: This covers technical, ethical, and application challenges.",
         "image_path": ""
       }
     }
