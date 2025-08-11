@@ -503,7 +503,7 @@ class TextbookDifficultySystem:
         self.qwen_endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
         self.qwen_model = qwen_model
 
-    def generate_new_textbook(self, textbook_snippet, features, theta, delta, adjustment, suggestion):
+    def generate_new_textbook(self, textbook_snippet, features, theta, delta, adjustment, suggestion,user_feedback=""):
         prompt = f"""
 你是一个教育机器人，任务是生成与学生能力匹配的个性化教材内容，并根据学生反馈进行对话式引导。基于以下信息：
 - 原教材内容：{textbook_snippet}
@@ -517,7 +517,7 @@ class TextbookDifficultySystem:
 - 学生能力（θ）：{theta}
 - 能力与难度差值（Δ）：{delta}
 - 调整策略：{suggestion}
-- 学生反馈：{user_feedback}
+- 学生反馈：{user_feedback or '无反馈'}  # ✅ 新增这一行
 生成一个新的教材片段（约100-200字），与原教材主题相关，格式为JSON：
 {{
   "text": "新教材内容",
@@ -553,7 +553,6 @@ class TextbookDifficultySystem:
             print(f"调用通义千问失败: {str(e)}")
             # 回退逻辑：返回原教材内容
             return {"text": textbook_snippet, "image_path": ""}
-
         try:
             if 'choices' in resp_json and len(resp_json['choices']) > 0:
                 message_content = resp_json['choices'][0].get('message', {}).get('content') or resp_json['choices'][0].get('text')
@@ -574,6 +573,8 @@ class TextbookDifficultySystem:
         except Exception as e:
             print(f"解析通义千问响应失败: {str(e)}")
             return {"text": textbook_snippet, "image_path": ""}
+
+    
     # 更新 run 方法以传递 user_feedback
     def run(self, output_path=None):
         def convert_numpy_types(obj):
