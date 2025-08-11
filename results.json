@@ -100,10 +100,10 @@
   "overall_difficulty": 4.424641907215118,
   "students": [
     {
-      "student_id": "99",
+      "student_id": "89",
       "cognitive_load_level": "high",
       "认知负荷得分": 100.0,
-      "score": 0.0,
+      "score": 10.0,
       "教材难易度": 2.52,
       "Δ范围": 1.52,
       "P(θ)区间": 0.01,
@@ -114,9 +114,9 @@
   ],
   "new_textbooks": [
     {
-      "student_id": "99",
+      "student_id": "89",
       "new_textbook": {
-        "text": "1. Large Language Models: Challenges\n1.1 Overview: Large Language Models (LLMs) advance text generation and translation.\n1.1.1 Models: BERT and GPT-4 use Transformer architectures.\n1.1.2 Mechanisms: Attention mechanisms process sequences efficiently.\n1.2 Complexity: Training complexity is $C(n, d) = O(n^2 d)$.\n1.2.1 Parameters: Here, $n$ is sequence length, $d$ is dimension.\n1.3 Scope: This covers technical, ethical, and application challenges.",
+        "text": "```json\n{\n  \"text\": \"大型语言模型（LLMs）在文本生成和翻译方面具有强大能力。例如，BERT 和 GPT-4 都基于 Transformer 架构，能高效处理语言任务。它们的核心机制是注意力机制，可以更智能地理解句子中的词语关系。训练这些模型的复杂度可以用公式表示为 C(n, d) = O(n²d)，其中 n 是句子长度，d 是模型的维度。这意味着，当句子变长或模型变复杂时，计算量会迅速增加。接下来我们将探讨这些模型在技术、伦理和应用方面面临的挑战。\",\n  \"image_path\": \"\"\n}\n```",
         "image_path": ""
       }
     }
