@@ -518,7 +518,7 @@ class TextbookDifficultySystem:
 - 能力与难度差值（Δ）：{delta}
 - 调整策略：{suggestion}
 - 学生反馈：{user_feedback or '无反馈'}  # ✅ 新增这一行
-生成一个新的教材片段（约100-200字），与原教材主题相关，格式为JSON：
+生成一个新的教材片段（约500-600字），与原教材主题相关，格式为JSON：
 {{
   "text": "新教材内容",
   "image_path": ""
