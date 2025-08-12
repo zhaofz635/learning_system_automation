@@ -100,10 +100,10 @@
   "overall_difficulty": 4.424641907215118,
   "students": [
     {
-      "student_id": "55",
+      "student_id": "345",
       "cognitive_load_level": "high",
-      "认知负荷得分": 90.625,
-      "score": 20.0,
+      "认知负荷得分": 87.5,
+      "score": 0.0,
       "教材难易度": 2.52,
       "Δ范围": 1.52,
       "P(θ)区间": 0.01,
@@ -114,9 +114,9 @@
   ],
   "new_textbooks": [
     {
-      "student_id": "55",
+      "student_id": "345",
       "new_textbook": {
-        "text": "1. Large Language Models: Challenges\n1.1 Overview: Large Language Models (LLMs) advance text generation and translation.\n1.1.1 Models: BERT and GPT-4 use Transformer architectures.\n1.1.2 Mechanisms: Attention mechanisms process sequences efficiently.\n1.2 Complexity: Training complexity is $C(n, d) = O(n^2 d)$.\n1.2.1 Parameters: Here, $n$ is sequence length, $d$ is dimension.\n1.3 Scope: This covers technical, ethical, and application challenges.",
+        "text": "```json\n{\n  \"text\": \"大型语言模型：挑战\\n\\n1.1 概述：大型语言模型（LLMs）在文本生成和翻译方面取得了显著进展。这些模型可以帮助我们自动写文章、翻译语言，甚至回答问题。\\n\\n1.1.1 常见模型：例如BERT和GPT-4，它们都基于一种叫做Transformer的结构。这种结构让模型能更好地理解句子中的每个词是怎么联系在一起的。\\n\\n1.1.2 工作机制：Transformer 使用了一种叫做“注意力机制”的方法。你可以把它想象成一个人在阅读时，会特别注意某些词，而忽略其他不太相关的词。这种方法让模型处理长句子变得更快、更准确。\\n\\n1.2 计算复杂度：训练这些模型需要非常强大的计算机。其中一个原因是，模型需要处理很长的句子（我们称为序列长度n），同时每个词的信息维度也很高（我们称为维度d）。\\n\\n例如，假设一个句子有100个词（n=100），每个词用768个数字表示（d=768），那么计算量就会非常大。大致来说，训练这样的模型需要的计算量是随着n的平方和d的大小一起增长的，我们用公式表示为 C(n, d) = O(n² × d)。\\n\\n1.3 挑战范围：大型语言模型不仅在技术上有挑战，还面临一些道德和实际应用的问题。比如，它们会不会说出不实或有害的话？我们该如何让它们更好地帮助人们而不是造成麻烦？\\n\\n通过学习这些问题，我们可以更好地理解大型语言模型，并想办法让它们变得更安全、更实用。\",\n  \"image_path\": \"\"\n}\n```",
         "image_path": ""
       }
     }
