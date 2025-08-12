@@ -101,22 +101,22 @@
   "students": [
     {
       "student_id": "55",
-      "cognitive_load_level": "medium",
-      "认知负荷得分": 68.75,
-      "score": 10.0,
+      "cognitive_load_level": "high",
+      "认知负荷得分": 90.625,
+      "score": 20.0,
       "教材难易度": 2.52,
-      "Δ范围": 0.52,
-      "P(θ)区间": 0.18,
-      "调节等级": "slight_adjust",
-      "操作建议": "微调内容结构，保持现有难度",
-      "匹配状态": "匹配"
+      "Δ范围": 1.52,
+      "P(θ)区间": 0.01,
+      "调节等级": "slight_downgrade",
+      "操作建议": "略微降低语言复杂度，增加辅助说明",
+      "匹配状态": "需降低难度"
     }
   ],
   "new_textbooks": [
     {
       "student_id": "55",
       "new_textbook": {
-        "text": "```json\n{\n  \"text\": \"1. 大型语言模型：挑战概述\\n\\n1.1 概述：大型语言模型（LLMs）在文本生成和翻译方面取得了显著进展。这些模型能够理解并生成自然语言，使它们在聊天机器人、自动写作和语言翻译中非常有用。\\n\\n1.1.1 常见模型：例如，BERT 和 GPT-4 都基于一种叫做 Transformer 的架构。这种架构让模型可以同时处理多个词语，而不是一个一个地处理，从而更高效地理解整个句子。\\n\\n1.1.2 工作机制：Transformer 模型使用一种叫做注意力机制的技术。它帮助模型在处理句子时关注到最重要的词语，从而更准确地理解和生成语言。\\n\\n1.2 计算复杂性：尽管这些模型功能强大，但训练它们需要大量的计算资源。计算复杂度可以用以下公式表示：C(n, d) = O(n²d)，其中 n 是句子的长度，d 是模型中每个词的特征维度。\\n\\n这个公式的意思是：当句子变得更长（n 增大）或模型变得更复杂（d 增大）时，训练所需的时间和资源会显著增加。\\n\\n1.3 研究范围：本节将探讨与大型语言模型相关的多个挑战，包括技术上的难题、伦理问题以及它们在现实世界中的应用限制。我们将逐步了解这些模型的优势与局限，并思考如何更好地利用它们。\",\n  \"image_path\": \"\"\n}\n```",
+        "text": "1. Large Language Models: Challenges\n1.1 Overview: Large Language Models (LLMs) advance text generation and translation.\n1.1.1 Models: BERT and GPT-4 use Transformer architectures.\n1.1.2 Mechanisms: Attention mechanisms process sequences efficiently.\n1.2 Complexity: Training complexity is $C(n, d) = O(n^2 d)$.\n1.2.1 Parameters: Here, $n$ is sequence length, $d$ is dimension.\n1.3 Scope: This covers technical, ethical, and application challenges.",
         "image_path": ""
       }
     }
