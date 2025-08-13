@@ -25,8 +25,10 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    container:
+      image: ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline
     env:
-      NLTK_DATA: /tmp/nltk_data
+      NLTK_DATA: /app/nltk_data  # 与 Dockerfile WORKDIR /app 一致
 
     steps:
       # 1. 检出代码
@@ -34,92 +36,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2. 设置 Python 环境
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-          cache: 'pip'
-
-      # 3. 清理环境
-      - name: Clean existing packages
-        run: |
-          pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python numpy || true
-          sudo apt-get remove -y python3-opencv libopencv-dev || true
-
-      # 4. 安装系统依赖（适配 Ubuntu 24.04）
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libopencv-dev \
-            libgl1 \
-            libgtk2.0-dev
-
-      # 5. 缓存 NLTK 数据
-      - name: Cache NLTK Data
-        uses: actions/cache@v3
-        with:
-          path: /tmp/nltk_data
-          key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-nltk-
-
-      # 6. 安装 Python 依赖
-      - name: Install Python packages
-        run: |
-          pip install -r requirements.txt
-          
-          # 验证安装
-          python -c "
-          import sys
-          print('Python路径:', sys.executable)
-          print('系统路径:', sys.path)
-          
-          try:
-              import numpy as np
-              print(f'NumPy版本: {np.__version__}')
-              import cv2
-              print(f'✅ OpenCV加载成功，版本: {cv2.__version__}')
-              import requests
-              print(f'✅ Requests加载成功，版本: {requests.__version__}')
-              import xgboost
-              print(f'✅ XGBoost加载成功，版本: {xgboost.__version__}')
-              import sklearn
-              print(f'✅ Scikit-Learn加载成功，版本: {sklearn.__version__}')
-              import skimage
-              print(f'✅ Scikit-Image加载成功，版本: {skimage.__version__}')
-              import pandas
-              print(f'✅ Pandas加载成功，版本: {pandas.__version__}')
-              import scipy
-              print(f'✅ SciPy加载成功，版本: {scipy.__version__}')
-              import nltk
-              print(f'✅ NLTK加载成功，版本: {nltk.__version__}')
-          except Exception as e:
-              print(f'❌ 导入失败: {str(e)}')
-              raise
-          "
-
-      # 7. 设置 NLTK 环境
-      - name: Setup NLTK
-        run: |
-          mkdir -p /tmp/nltk_data
-          chmod -R 777 /tmp/nltk_data
-          echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
-
-          python -c "
-          import nltk, os
-          nltk.download('punkt', download_dir=os.environ['NLTK_DATA'], quiet=False)
-          nltk.download('punkt_tab', download_dir=os.environ['NLTK_DATA'], quiet=False)
-          nltk.download('stopwords', download_dir=os.environ['NLTK_DATA'], quiet=False)
-          print('✅ 关键NLTK资源已下载')
-          "
-
-      # 8. 准备输入数据
+      # 2. 准备输入数据
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
-          cat > input_data.json <<EOF
+          cat > /app/input_data.json <<EOF
           [
             {
               "student_id": "${{ inputs.student_id }}",
@@ -130,16 +51,16 @@ jobs:
           ]
           EOF
           echo "输入文件内容:"
-          jq . input_data.json || cat input_data.json
+          jq . /app/input_data.json || cat /app/input_data.json
 
-      # 9. 运行分析脚本
+      # 3. 运行分析脚本
       - name: Run analysis
         env:
           ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
-          NLTK_DATA: /tmp/nltk_data
+          NLTK_DATA: /app/nltk_data
         run: |
-          # 最终环境验证
-          python -c "
+          # 环境验证
+          python3.9 -c "
           import sys, numpy as np, cv2, requests, xgboost, sklearn, skimage, pandas, scipy, nltk
           print(f'Python: {sys.version}')
           print(f'NumPy: {np.__version__}')
@@ -158,11 +79,11 @@ jobs:
           attempt=1
           while [ $attempt -le $max_attempts ]; do
             echo "尝试第 $attempt 次运行..."
-            python textbook_difficulty_system.py \
-              --cognitive_load input_data.json \
-              --scores input_data.json \
-              --textbook textbook.json \
-              --output results.json && break
+            python3.9 /app/textbook_difficulty_system.py \
+              --cognitive_load /app/input_data.json \
+              --scores /app/input_data.json \
+              --textbook /app/textbook.json \
+              --output /app/results.json && break
             attempt=$((attempt + 1))
             sleep 5
           done
@@ -173,20 +94,20 @@ jobs:
           fi
           
           echo "分析结果:"
-          jq . results.json || cat results.json
+          jq . /app/results.json || cat /app/results.json
 
-      # 10. 提交结果
+      # 4. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add results.json
+          git add /app/results.json
           git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
           git pull --rebase origin main
           remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
           git push "${remote_repo}" HEAD:main || exit 0
 
-      # 11. 上传到 Google Sheets
+      # 5. 上传到 Google Sheets
       - name: Upload to Google Sheets
         continue-on-error: true
         env:
@@ -195,9 +116,9 @@ jobs:
           curl --fail --show-error --retry 3 \
             -X POST "$GAS_SCRIPT_URL" \
             -H "Content-Type: application/json" \
-            --data-binary @results.json
+            --data-binary @/app/results.json
 
-      # 12. 最终状态通知
+      # 6. 最终状态通知
       - name: Notify status
         if: always()
         run: |
