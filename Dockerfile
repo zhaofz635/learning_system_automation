@@ -1,5 +1,5 @@
 # 使用阿里云加速官方 Python 镜像
-FROM registry.cn-hangzhou.aliyuncs.com/library/python:3.9-slim
+FROM python:3.9-slim
 
 # 设置非交互模式
 ENV DEBIAN_FRONTEND=noninteractive
