@@ -25,124 +25,66 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      NLTK_DATA: /tmp/nltk_data
-      VIRTUAL_ENV: ${{ github.workspace }}/.venv
-      PATH: ${{ github.workspace }}/.venv/bin:$PATH
 
     steps:
-      # 1. 确保 tar 可用（新步骤）
-      - name: Ensure tar is installed
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y tar
-          which tar || { echo "tar 未找到，安装失败"; exit 1; }
-          tar --version
-
-      # 2. 检出代码
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # 3. 设置 Python 环境
+      # 1. 设置 Python 并缓存 pip
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-          cache: 'pip'
 
-      # 4. 安装系统依赖
+      # 2. 缓存 pip 包（wheel 和源码）
+      - name: Cache pip
+        uses: actions/cache@v4
+        id: pip-cache
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # 3. 安装系统依赖（只安装一次，缓存由系统层处理）
       - name: Install system dependencies
+        if: steps.pip-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libopencv-dev \
-            libgl1 \
-            libgtk2.0-dev
+          sudo apt-get install -y libopencv-dev libgl1 libgtk2.0-dev
+
+      # 4. 安装 Python 包（跳过如果缓存命中）
+      - name: Install Python packages
+        if: steps.pip-cache.outputs.cache-hit != 'true'
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
       # 5. 缓存 NLTK 数据
       - name: Cache NLTK Data
-        uses: actions/cache@v3
-        with:
-          path: /tmp/nltk_data
-          key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-nltk-
-
-      # 6. 缓存虚拟环境
-      - name: Cache virtual environment
-        id: cache-venv
         uses: actions/cache@v4
+        id: nltk-cache
         with:
-          path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('requirements.txt') }}-${{ env.pythonLocation }}
+          path: ./nltk_data
+          key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
 
-      # 7. 创建并安装依赖到 venv（仅当缓存未命中）
-      - name: Set up virtual environment
-        if: steps.cache-venv.outputs.cache-hit != 'true'
+      - name: Download NLTK Data
+        if: steps.nltk-cache.outputs.cache-hit != 'true'
         run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install -r requirements.txt
-
-      # 8. 激活 venv 并更新 PATH
-      - name: Activate virtual environment
-        run: |
-          echo "PATH=$VIRTUAL_ENV/bin:$PATH" >> $GITHUB_ENV
-          echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
-
-      # 9. 验证安装
-      - name: Verify Python packages
-        run: |
-          python -c "
-          import sys
-          print('Python路径:', sys.executable)
-          print('系统路径:', sys.path)
-          try:
-              import numpy as np
-              print(f'NumPy版本: {np.__version__}')
-              import cv2
-              print(f'✅ OpenCV加载成功，版本: {cv2.__version__}')
-              import requests
-              print(f'✅ Requests加载成功，版本: {requests.__version__}')
-              import xgboost
-              print(f'✅ XGBoost加载成功，版本: {xgboost.__version__}')
-              import sklearn
-              print(f'✅ Scikit-Learn加载成功，版本: {sklearn.__version__}')
-              import skimage
-              print(f'✅ Scikit-Image加载成功，版本: {skimage.__version__}')
-              import pandas
-              print(f'✅ Pandas加载成功，版本: {pandas.__version__}')
-              import scipy
-              print(f'✅ SciPy加载成功，版本: {scipy.__version__}')
-              import nltk
-              print(f'✅ NLTK加载成功，版本: {nltk.__version__}')
-          except Exception as e:
-              print(f'❌ 导入失败: {str(e)}')
-              raise
-          "
-
-      # 10. 设置 NLTK 环境
-      - name: Setup NLTK
-        run: |
-          mkdir -p /tmp/nltk_data
-          chmod -R 777 /tmp/nltk_data
-          echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
           python -c "
           import nltk, os
-          def download_if_missing(resource):
-              path = os.path.join(os.environ['NLTK_DATA'], resource)
-              if not os.path.exists(path):
-                  nltk.download(resource, download_dir=os.environ['NLTK_DATA'], quiet=False)
-              else:
-                  print(f'{resource} 已存在，跳过下载')
-          download_if_missing('punkt')
-          download_if_missing('punkt_tab')
-          download_if_missing('stopwords')
-          print('✅ 关键NLTK资源已处理')
+          nltk.download('punkt', download_dir='nltk_data', quiet=False)
+          nltk.download('punkt_tab', download_dir='nltk_data', quiet=False)
+          nltk.download('stopwords', download_dir='nltk_data', quiet=False)
+          print('✅ NLTK 资源已下载')
           "
+        env:
+          NLTK_DATA: ./nltk_data
 
-      # 11. 准备输入数据
+      # 6. 设置环境变量
+      - name: Set NLTK environment
+        run: echo "NLTK_DATA=$(pwd)/nltk_data" >> $GITHUB_ENV
+
+      # 7. 准备输入数据
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
@@ -156,32 +98,21 @@ jobs:
             }
           ]
           EOF
-          echo "输入文件内容:"
           jq . input_data.json || cat input_data.json
 
-      # 12. 运行分析脚本
+      # 8. 运行分析脚本
       - name: Run analysis
         env:
           ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
-          NLTK_DATA: /tmp/nltk_data
         run: |
           python -c "
-          import sys, numpy as np, cv2, requests, xgboost, sklearn, skimage, pandas, scipy, nltk
-          print(f'Python: {sys.version}')
-          print(f'NumPy: {np.__version__}')
-          print(f'OpenCV: {cv2.__version__}')
-          print(f'Requests: {requests.__version__}')
-          print(f'XGBoost: {xgboost.__version__}')
-          print(f'Scikit-Learn: {sklearn.__version__}')
-          print(f'Scikit-Image: {skimage.__version__}')
-          print(f'Pandas: {pandas.__version__}')
-          print(f'SciPy: {scipy.__version__}')
-          print(f'NLTK: {nltk.__version__}')
+          import numpy as np, cv2, requests, xgboost, sklearn, skimage, pandas, scipy, nltk
+          print('✅ 所有包导入成功')
           "
           max_attempts=3
           attempt=1
           while [ $attempt -le $max_attempts ]; do
-            echo "尝试第 $attempt 次运行..."
+            echo "尝试第 $attempt 次..."
             python textbook_difficulty_system.py \
               --cognitive_load input_data.json \
               --scores input_data.json \
@@ -190,25 +121,20 @@ jobs:
             attempt=$((attempt + 1))
             sleep 5
           done
-          if [ $attempt -gt $max_attempts ]; then
-            echo "❌ 运行失败，已达最大尝试次数"
-            exit 1
-          fi
-          echo "分析结果:"
+          [ $attempt -gt $max_attempts ] && exit 1
           jq . results.json || cat results.json
 
-      # 13. 提交结果
+      # 9. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add results.json
-          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
+          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更"
           git pull --rebase origin main
-          remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
-          git push "${remote_repo}" HEAD:main || exit 0
+          git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main || true
 
-      # 14. 上传到 Google Sheets
+      # 10. 上传到 Google Sheets
       - name: Upload to Google Sheets
         continue-on-error: true
         env:
@@ -219,10 +145,8 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @results.json
 
-      # 15. 最终状态通知
       - name: Notify status
         if: always()
         run: |
           echo "工作流状态: ${{ job.status }}"
-          echo "结果文件: https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF}/results.json"
-          echo "详细日志: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "结果: https://github.com/${GITHUB_REPOSITORY}/blob/main/results.json"
