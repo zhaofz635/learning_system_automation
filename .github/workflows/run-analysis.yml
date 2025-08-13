@@ -51,6 +51,22 @@ jobs:
           EOF
           echo "📄 输入文件已生成:"
           cat input_data.json
+        shell: bash
+      # - name: Prepare input files
+      #   run: |
+      #     cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
+      #     cat > input_data.json <<EOF
+      #     [
+      #       {
+      #         "student_id": "${{ inputs.student_id }}",
+      #         "score": ${{ inputs.score }},
+      #         "cognitive_load": [${cognitive_load_array// /,}],
+      #         "user_feedback": "${{ inputs.user_feedback }}"
+      #       }
+      #     ]
+      #     EOF
+      #     echo "📄 输入文件已生成:"
+      #     cat input_data.json
 
       # 3. 直接运行分析脚本（无需安装！）
       - name: Run analysis
