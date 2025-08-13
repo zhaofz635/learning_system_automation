@@ -34,13 +34,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2. 登录 GHCR（私有镜像）
+      # 2. 登录 GHCR
       - name: Log in to GHCR
         run: echo "${{ secrets.DOCKER_PAT }}" | docker login ghcr.io -u zhaofz635 --password-stdin
         env:
           DOCKER_PAT: ${{ secrets.DOCKER_PAT }}
 
-      # 3. 拉取镜像
+      # 3. 拉取 Docker 镜像
       - name: Pull Docker image
         run: docker pull ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline
 
@@ -48,7 +48,8 @@ jobs:
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
-          cat > input_data.json <<EOF
+          mkdir -p /app
+          cat > /app/input_data.json <<EOF
           [
             {
               "student_id": "${{ inputs.student_id }}",
@@ -59,13 +60,12 @@ jobs:
           ]
           EOF
           echo "输入文件内容:"
-          jq . input_data.json || cat input_data.json
+          jq . /app/input_data.json || cat /app/input_data.json
 
-      # 5. 运行分析脚本（容器内执行）
+      # 5. 运行分析脚本（容器内）
       - name: Run analysis inside Docker
         env:
           ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
-          NLTK_DATA: /app/nltk_data
         run: |
           docker run --rm -v $PWD:/app -e NLTK_DATA=/app/nltk_data \
             ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline \
@@ -80,7 +80,7 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add results.json
+          git add /app/results.json
           git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
           git pull --rebase origin main
           remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
@@ -95,7 +95,7 @@ jobs:
           curl --fail --show-error --retry 3 \
             -X POST "$GAS_SCRIPT_URL" \
             -H "Content-Type: application/json" \
-            --data-binary @results.json
+            --data-binary @/app/results.json
 
       # 8. 最终状态通知
       - name: Notify status
