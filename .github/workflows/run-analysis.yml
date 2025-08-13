@@ -24,41 +24,71 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: write
-      packages: read
-      actions: read
-    env:
-      NLTK_DATA: /app/nltk_data
+    timeout-minutes: 20
 
     steps:
-      # 1. 检出代码
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # 2. 登录 GHCR (使用官方登录action)
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      # 1. 设置 Python 并缓存 pip
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          python-version: '3.9'
 
-      # 3. 拉取 Docker 镜像
-      - name: Pull Docker image
+      # 2. 缓存 pip 包（wheel 和源码）
+      - name: Cache pip
+        uses: actions/cache@v4
+        id: pip-cache
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # 3. 安装系统依赖（只安装一次，缓存由系统层处理）
+      - name: Install system dependencies
+        if: steps.pip-cache.outputs.cache-hit != 'true'
         run: |
-          docker pull ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline || \
-            echo "::warning::Failed to pull image, will try to build instead"
-          # 如果拉取失败可以添加构建逻辑
+          sudo apt-get update
+          sudo apt-get install -y libopencv-dev libgl1 libgtk2.0-dev
 
-      # 4. 准备输入数据
+      # 4. 安装 Python 包（跳过如果缓存命中）
+      - name: Install Python packages
+        if: steps.pip-cache.outputs.cache-hit != 'true'
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 5. 缓存 NLTK 数据
+      - name: Cache NLTK Data
+        uses: actions/cache@v4
+        id: nltk-cache
+        with:
+          path: ./nltk_data
+          key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
+
+      - name: Download NLTK Data
+        if: steps.nltk-cache.outputs.cache-hit != 'true'
+        run: |
+          python -c "
+          import nltk, os
+          nltk.download('punkt', download_dir='nltk_data', quiet=False)
+          nltk.download('punkt_tab', download_dir='nltk_data', quiet=False)
+          nltk.download('stopwords', download_dir='nltk_data', quiet=False)
+          print('✅ NLTK 资源已下载')
+          "
+        env:
+          NLTK_DATA: ./nltk_data
+
+      # 6. 设置环境变量
+      - name: Set NLTK environment
+        run: echo "NLTK_DATA=$(pwd)/nltk_data" >> $GITHUB_ENV
+
+      # 7. 准备输入数据
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
-          mkdir -p /app
-          cat > /app/input_data.json <<EOF
+          cat > input_data.json <<EOF
           [
             {
               "student_id": "${{ inputs.student_id }}",
@@ -68,34 +98,43 @@ jobs:
             }
           ]
           EOF
-          echo "输入文件内容:"
-          jq . /app/input_data.json || cat /app/input_data.json
+          jq . input_data.json || cat input_data.json
 
-      # 5. 运行分析脚本（容器内）
-      - name: Run analysis inside Docker
+      # 8. 运行分析脚本
+      - name: Run analysis
         env:
           ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
         run: |
-          docker run --rm -v $PWD:/app -e NLTK_DATA=/app/nltk_data \
-            ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline \
-            python3.9 /app/textbook_difficulty_system.py \
-              --cognitive_load /app/input_data.json \
-              --scores /app/input_data.json \
-              --textbook /app/textbook.json \
-              --output /app/results.json
+          python -c "
+          import numpy as np, cv2, requests, xgboost, sklearn, skimage, pandas, scipy, nltk
+          print('✅ 所有包导入成功')
+          "
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "尝试第 $attempt 次..."
+            python textbook_difficulty_system.py \
+              --cognitive_load input_data.json \
+              --scores input_data.json \
+              --textbook textbook.json \
+              --output results.json && break
+            attempt=$((attempt + 1))
+            sleep 5
+          done
+          [ $attempt -gt $max_attempts ] && exit 1
+          jq . results.json || cat results.json
 
-      # 6. 提交结果
+      # 9. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add /app/results.json
-          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
+          git add results.json
+          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更"
           git pull --rebase origin main
-          remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
-          git push "${remote_repo}" HEAD:main || exit 0
+          git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main || true
 
-      # 7. 上传到 Google Sheets
+      # 10. 上传到 Google Sheets
       - name: Upload to Google Sheets
         continue-on-error: true
         env:
@@ -104,12 +143,10 @@ jobs:
           curl --fail --show-error --retry 3 \
             -X POST "$GAS_SCRIPT_URL" \
             -H "Content-Type: application/json" \
-            --data-binary @/app/results.json
+            --data-binary @results.json
 
-      # 8. 最终状态通知
       - name: Notify status
         if: always()
         run: |
           echo "工作流状态: ${{ job.status }}"
-          echo "结果文件: https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF/results.json"
-          echo "详细日志: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          echo "结果: https://github.com/${GITHUB_REPOSITORY}/blob/main/results.json"
