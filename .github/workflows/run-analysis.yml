@@ -24,7 +24,7 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       NLTK_DATA: /app/nltk_data
 
@@ -67,7 +67,8 @@ jobs:
           ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
           NLTK_DATA: /app/nltk_data
         run: |
-          docker run --rm -v $PWD:/app ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline \
+          docker run --rm -v $PWD:/app -e NLTK_DATA=/app/nltk_data \
+            ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline \
             python3.9 /app/textbook_difficulty_system.py \
               --cognitive_load /app/input_data.json \
               --scores /app/input_data.json \
