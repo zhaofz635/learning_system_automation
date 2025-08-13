@@ -28,22 +28,30 @@ jobs:
     env:
       NLTK_DATA: /tmp/nltk_data
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
-      PATH: ${{ github.workspace }}/.venv/bin:$PATH  # 默认 PATH 更新（后续步骤若需会覆盖）
+      PATH: ${{ github.workspace }}/.venv/bin:$PATH
 
     steps:
-      # 1. 检出代码
+      # 1. 确保 tar 可用（新步骤）
+      - name: Ensure tar is installed
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tar
+          which tar || { echo "tar 未找到，安装失败"; exit 1; }
+          tar --version
+
+      # 2. 检出代码
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. 设置 Python 环境
+      # 3. 设置 Python 环境
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-          cache: 'pip'  # 保留 pip 下载缓存
+          cache: 'pip'
 
-      # 3. 安装系统依赖（适配 Ubuntu 24.04）
+      # 4. 安装系统依赖
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -52,7 +60,7 @@ jobs:
             libgl1 \
             libgtk2.0-dev
 
-      # 4. 缓存 NLTK 数据（不变）
+      # 5. 缓存 NLTK 数据
       - name: Cache NLTK Data
         uses: actions/cache@v3
         with:
@@ -61,15 +69,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nltk-
 
-      # 5. 缓存虚拟环境（新：缓存命中时跳过 pip install）
+      # 6. 缓存虚拟环境
       - name: Cache virtual environment
         id: cache-venv
-        uses: actions/cache@v4  # 使用 v4 提升性能
+        uses: actions/cache@v4
         with:
           path: .venv
           key: ${{ runner.os }}-venv-${{ hashFiles('requirements.txt') }}-${{ env.pythonLocation }}
 
-      # 6. 创建并安装依赖到 venv（仅当缓存未命中）
+      # 7. 创建并安装依赖到 venv（仅当缓存未命中）
       - name: Set up virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
@@ -77,20 +85,19 @@ jobs:
           source .venv/bin/activate
           pip install -r requirements.txt
 
-      # 7. 激活 venv 并更新 PATH（确保后续步骤使用 venv）
+      # 8. 激活 venv 并更新 PATH
       - name: Activate virtual environment
         run: |
           echo "PATH=$VIRTUAL_ENV/bin:$PATH" >> $GITHUB_ENV
           echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
 
-      # 8. 验证安装（使用 venv）
+      # 9. 验证安装
       - name: Verify Python packages
         run: |
           python -c "
           import sys
           print('Python路径:', sys.executable)
           print('系统路径:', sys.path)
-          
           try:
               import numpy as np
               print(f'NumPy版本: {np.__version__}')
@@ -115,13 +122,12 @@ jobs:
               raise
           "
 
-      # 9. 设置 NLTK 环境（加条件检查避免重复下载）
+      # 10. 设置 NLTK 环境
       - name: Setup NLTK
         run: |
           mkdir -p /tmp/nltk_data
           chmod -R 777 /tmp/nltk_data
           echo "NLTK_DATA=/tmp/nltk_data" >> $GITHUB_ENV
-
           python -c "
           import nltk, os
           def download_if_missing(resource):
@@ -130,14 +136,13 @@ jobs:
                   nltk.download(resource, download_dir=os.environ['NLTK_DATA'], quiet=False)
               else:
                   print(f'{resource} 已存在，跳过下载')
-          
           download_if_missing('punkt')
           download_if_missing('punkt_tab')
           download_if_missing('stopwords')
           print('✅ 关键NLTK资源已处理')
           "
 
-      # 10. 准备输入数据（不变，自动使用 venv）
+      # 11. 准备输入数据
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
@@ -154,13 +159,12 @@ jobs:
           echo "输入文件内容:"
           jq . input_data.json || cat input_data.json
 
-      # 11 “‘运行分析脚本（不变，自动使用 venv）
+      # 12. 运行分析脚本
       - name: Run analysis
         env:
           ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
           NLTK_DATA: /tmp/nltk_data
         run: |
-          # 最终环境验证
           python -c "
           import sys, numpy as np, cv2, requests, xgboost, sklearn, skimage, pandas, scipy, nltk
           print(f'Python: {sys.version}')
@@ -174,8 +178,6 @@ jobs:
           print(f'SciPy: {scipy.__version__}')
           print(f'NLTK: {nltk.__version__}')
           "
-          
-          # 带重试的运行机制
           max_attempts=3
           attempt=1
           while [ $attempt -le $max_attempts ]; do
@@ -188,16 +190,14 @@ jobs:
             attempt=$((attempt + 1))
             sleep 5
           done
-          
           if [ $attempt -gt $max_attempts ]; then
             echo "❌ 运行失败，已达最大尝试次数"
             exit 1
           fi
-          
           echo "分析结果:"
           jq . results.json || cat results.json
 
-      # 12. 提交结果（不变）
+      # 13. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
@@ -208,7 +208,7 @@ jobs:
           remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
           git push "${remote_repo}" HEAD:main || exit 0
 
-      # 13. 上传到 Google Sheets（不变）
+      # 14. 上传到 Google Sheets
       - name: Upload to Google Sheets
         continue-on-error: true
         env:
@@ -219,7 +219,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @results.json
 
-      # 14. 最终状态通知（不变）
+      # 15. 最终状态通知
       - name: Notify status
         if: always()
         run: |
