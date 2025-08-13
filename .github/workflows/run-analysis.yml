@@ -24,68 +24,23 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline
+      credentials:
+        username: zhaofz635
+        password: ${{ secrets.CR_PAT }}
+      options: --cpus 2 --memory 4g
     timeout-minutes: 20
+    env:
+      NLTK_DATA: /app/nltk_data
 
     steps:
-      - uses: actions/checkout@v4
-
-      # 1. 设置 Python 并缓存 pip
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v5
+      - name: 检出代码
+        uses: actions/checkout@v4
         with:
-          python-version: '3.9'
+          fetch-depth: 0
 
-      # 2. 缓存 pip 包（wheel 和源码）
-      - name: Cache pip
-        uses: actions/cache@v4
-        id: pip-cache
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      # 3. 安装系统依赖（只安装一次，缓存由系统层处理）
-      - name: Install system dependencies
-        if: steps.pip-cache.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libopencv-dev libgl1 libgtk2.0-dev
-
-      # 4. 安装 Python 包（跳过如果缓存命中）
-      - name: Install Python packages
-        if: steps.pip-cache.outputs.cache-hit != 'true'
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-
-      # 5. 缓存 NLTK 数据
-      - name: Cache NLTK Data
-        uses: actions/cache@v4
-        id: nltk-cache
-        with:
-          path: ./nltk_data
-          key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
-
-      - name: Download NLTK Data
-        if: steps.nltk-cache.outputs.cache-hit != 'true'
-        run: |
-          python -c "
-          import nltk, os
-          nltk.download('punkt', download_dir='nltk_data', quiet=False)
-          nltk.download('punkt_tab', download_dir='nltk_data', quiet=False)
-          nltk.download('stopwords', download_dir='nltk_data', quiet=False)
-          print('✅ NLTK 资源已下载')
-          "
-        env:
-          NLTK_DATA: ./nltk_data
-
-      # 6. 设置环境变量
-      - name: Set NLTK environment
-        run: echo "NLTK_DATA=$(pwd)/nltk_data" >> $GITHUB_ENV
-
-      # 7. 准备输入数据
-      - name: Prepare input files
+      - name: 准备输入数据
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
           cat > input_data.json <<EOF
@@ -98,21 +53,15 @@ jobs:
             }
           ]
           EOF
+          echo "输入文件内容:"
           jq . input_data.json || cat input_data.json
 
-      # 8. 运行分析脚本
-      - name: Run analysis
-        env:
-          ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
+      - name: 运行分析
         run: |
-          python -c "
-          import numpy as np, cv2, requests, xgboost, sklearn, skimage, pandas, scipy, nltk
-          print('✅ 所有包导入成功')
-          "
           max_attempts=3
           attempt=1
           while [ $attempt -le $max_attempts ]; do
-            echo "尝试第 $attempt 次..."
+            echo "尝试第 $attempt 次运行..."
             python textbook_difficulty_system.py \
               --cognitive_load input_data.json \
               --scores input_data.json \
@@ -121,21 +70,26 @@ jobs:
             attempt=$((attempt + 1))
             sleep 5
           done
-          [ $attempt -gt $max_attempts ] && exit 1
+          
+          if [ $attempt -gt $max_attempts ]; then
+            echo "❌ 运行失败"
+            exit 1
+          fi
+          
+          echo "分析结果:"
           jq . results.json || cat results.json
 
-      # 9. 提交结果
-      - name: Commit results
+      - name: 提交结果
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add results.json
-          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更"
+          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
           git pull --rebase origin main
-          git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main || true
+          remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
+          git push "${remote_repo}" HEAD:main || exit 0
 
-      # 10. 上传到 Google Sheets
-      - name: Upload to Google Sheets
+      - name: 上传到 Google Sheets
         continue-on-error: true
         env:
           GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
@@ -145,8 +99,9 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @results.json
 
-      - name: Notify status
+      - name: 通知状态
         if: always()
         run: |
           echo "工作流状态: ${{ job.status }}"
-          echo "结果: https://github.com/${GITHUB_REPOSITORY}/blob/main/results.json"
+          echo "结果文件: https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF}/results.json"
+          echo "详细日志: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
