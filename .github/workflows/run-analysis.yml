@@ -29,7 +29,7 @@ jobs:
       credentials:
         username: zhaofz635
         password: ${{ secrets.CR_PAT }}
-      options: --cpus 2 --memory 4g
+      options: "--cpus 2 --memory 4g"
     timeout-minutes: 20
     env:
       NLTK_DATA: /app/nltk_data
