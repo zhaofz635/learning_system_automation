@@ -23,24 +23,20 @@ on:
 
 jobs:
   analyze:
+    # 使用你推送的镜像，跳过所有安装
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline
       credentials:
-        username: zhaofz635
-        password: ${{ secrets.CR_PAT }}
-      options: "--cpus 2 --memory 4g"
-    timeout-minutes: 20
-    env:
-      NLTK_DATA: /app/nltk_data
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      # 1. 检出代码（为了读取输入和提交结果）
+      - uses: actions/checkout@v4
 
-      - name: 准备输入数据
+      # 2. 准备输入数据
+      - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
           cat > input_data.json <<EOF
@@ -53,43 +49,35 @@ jobs:
             }
           ]
           EOF
-          echo "输入文件内容:"
-          jq . input_data.json || cat input_data.json
+          echo "📄 输入文件已生成:"
+          cat input_data.json
 
-      - name: 运行分析
+      # 3. 直接运行分析脚本（无需安装！）
+      - name: Run analysis
+        env:
+          ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
         run: |
-          max_attempts=3
-          attempt=1
-          while [ $attempt -le $max_attempts ]; do
-            echo "尝试第 $attempt 次运行..."
-            python textbook_difficulty_system.py \
-              --cognitive_load input_data.json \
-              --scores input_data.json \
-              --textbook textbook.json \
-              --output results.json && break
-            attempt=$((attempt + 1))
-            sleep 5
-          done
-          
-          if [ $attempt -gt $max_attempts ]; then
-            echo "❌ 运行失败"
-            exit 1
-          fi
-          
-          echo "分析结果:"
-          jq . results.json || cat results.json
+          echo "🔍 开始运行 textbook_difficulty_system.py"
+          python textbook_difficulty_system.py \
+            --cognitive_load input_data.json \
+            --scores input_data.json \
+            --textbook textbook.json \
+            --output results.json
+          echo "✅ 分析完成"
+          cat results.json
 
-      - name: 提交结果
+      # 4. 提交结果到 GitHub
+      - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add results.json
-          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
-          git pull --rebase origin main
-          remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
-          git push "${remote_repo}" HEAD:main || exit 0
+          git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "No changes to commit"
+          git pull --rebase origin main || true
+          git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main || true
 
-      - name: 上传到 Google Sheets
+      # 5. 上传到 Google Sheets（可选）
+      - name: Upload to Google Sheets
         continue-on-error: true
         env:
           GAS_SCRIPT_URL: ${{ secrets.GAS_WEBAPP_URL }}
@@ -99,9 +87,9 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @results.json
 
-      - name: 通知状态
+      # 6. 通知状态
+      - name: Notify status
         if: always()
         run: |
           echo "工作流状态: ${{ job.status }}"
-          echo "结果文件: https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF}/results.json"
-          echo "详细日志: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "结果文件: https://github.com/${{ github.repository }}/blob/main/results.json"
