@@ -25,8 +25,6 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    container:
-      image: ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline
     env:
       NLTK_DATA: /app/nltk_data
 
@@ -36,17 +34,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2. 登录 GHCR
+      # 2. 登录 GHCR（私有镜像）
       - name: Log in to GHCR
-        run: echo ${{ secrets.DOCKER_PAT }} | docker login ghcr.io -u zhaofz635 --password-stdin
+        run: echo "${{ secrets.DOCKER_PAT }}" | docker login ghcr.io -u zhaofz635 --password-stdin
         env:
           DOCKER_PAT: ${{ secrets.DOCKER_PAT }}
 
-      # 3. 准备输入数据
+      # 3. 拉取镜像
+      - name: Pull Docker image
+        run: docker pull ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline
+
+      # 4. 准备输入数据
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
-          cat > /app/input_data.json <<EOF
+          cat > input_data.json <<EOF
           [
             {
               "student_id": "${{ inputs.student_id }}",
@@ -57,63 +59,33 @@ jobs:
           ]
           EOF
           echo "输入文件内容:"
-          jq . /app/input_data.json || cat /app/input_data.json
+          jq . input_data.json || cat input_data.json
 
-      # 4. 运行分析脚本
-      - name: Run analysis
+      # 5. 运行分析脚本（容器内执行）
+      - name: Run analysis inside Docker
         env:
           ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
           NLTK_DATA: /app/nltk_data
         run: |
-          # 环境验证
-          python3.9 -c "
-          import sys, numpy as np, cv2, requests, xgboost, sklearn, skimage, pandas, scipy, nltk
-          print(f'Python: {sys.version}')
-          print(f'NumPy: {np.__version__}')
-          print(f'OpenCV: {cv2.__version__}')
-          print(f'Requests: {requests.__version__}')
-          print(f'XGBoost: {xgboost.__version__}')
-          print(f'Scikit-Learn: {sklearn.__version__}')
-          print(f'Scikit-Image: {skimage.__version__}')
-          print(f'Pandas: {pandas.__version__}')
-          print(f'SciPy: {scipy.__version__}')
-          print(f'NLTK: {nltk.__version__}')
-          "
-          
-          # 带重试的运行机制
-          max_attempts=3
-          attempt=1
-          while [ $attempt -le $max_attempts ]; do
-            echo "尝试第 $attempt 次运行..."
+          docker run --rm -v $PWD:/app ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline \
             python3.9 /app/textbook_difficulty_system.py \
               --cognitive_load /app/input_data.json \
               --scores /app/input_data.json \
               --textbook /app/textbook.json \
-              --output /app/results.json && break
-            attempt=$((attempt + 1))
-            sleep 5
-          done
-          
-          if [ $attempt -gt $max_attempts ]; then
-            echo "❌ 运行失败，已达最大尝试次数"
-            exit 1
-          fi
-          
-          echo "分析结果:"
-          jq . /app/results.json || cat /app/results.json
+              --output /app/results.json
 
-      # 5. 提交结果
+      # 6. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add /app/results.json
+          git add results.json
           git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "无变更可提交"
           git pull --rebase origin main
           remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
           git push "${remote_repo}" HEAD:main || exit 0
 
-      # 6. 上传到 Google Sheets
+      # 7. 上传到 Google Sheets
       - name: Upload to Google Sheets
         continue-on-error: true
         env:
@@ -122,9 +94,9 @@ jobs:
           curl --fail --show-error --retry 3 \
             -X POST "$GAS_SCRIPT_URL" \
             -H "Content-Type: application/json" \
-            --data-binary @/app/results.json
+            --data-binary @results.json
 
-      # 7. 最终状态通知
+      # 8. 最终状态通知
       - name: Notify status
         if: always()
         run: |
