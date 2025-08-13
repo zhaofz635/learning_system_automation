@@ -28,7 +28,7 @@ jobs:
     container:
       image: ghcr.io/zhaofz635/learning_system_automation:textbook-pipeline
     env:
-      NLTK_DATA: /app/nltk_data  # 与 Dockerfile WORKDIR /app 一致
+      NLTK_DATA: /app/nltk_data
 
     steps:
       # 1. 检出代码
@@ -36,7 +36,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2. 准备输入数据
+      # 2. 登录 GHCR
+      - name: Log in to GHCR
+        run: echo ${{ secrets.DOCKER_PAT }} | docker login ghcr.io -u zhaofz635 --password-stdin
+        env:
+          DOCKER_PAT: ${{ secrets.DOCKER_PAT }}
+
+      # 3. 准备输入数据
       - name: Prepare input files
         run: |
           cognitive_load_array=$(echo "${{ inputs.cognitive_load }}" | tr ',' ' ')
@@ -53,7 +59,7 @@ jobs:
           echo "输入文件内容:"
           jq . /app/input_data.json || cat /app/input_data.json
 
-      # 3. 运行分析脚本
+      # 4. 运行分析脚本
       - name: Run analysis
         env:
           ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
@@ -96,7 +102,7 @@ jobs:
           echo "分析结果:"
           jq . /app/results.json || cat /app/results.json
 
-      # 4. 提交结果
+      # 5. 提交结果
       - name: Commit results
         run: |
           git config --global user.name "GitHub Actions"
@@ -107,7 +113,7 @@ jobs:
           remote_repo="https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
           git push "${remote_repo}" HEAD:main || exit 0
 
-      # 5. 上传到 Google Sheets
+      # 6. 上传到 Google Sheets
       - name: Upload to Google Sheets
         continue-on-error: true
         env:
@@ -118,7 +124,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @/app/results.json
 
-      # 6. 最终状态通知
+      # 7. 最终状态通知
       - name: Notify status
         if: always()
         run: |
