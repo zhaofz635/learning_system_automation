@@ -83,14 +83,26 @@ jobs:
           cat results.json
 
       # 4. 提交结果到 GitHub
+            # 4. 提交结果到 GitHub
       - name: Commit results
         run: |
+          # 告诉 Git 信任这个目录（关键！）
+          git config --global --add safe.directory /__w/learning_system_automation/learning_system_automation
+
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add results.json
           git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "No changes to commit"
           git pull --rebase origin main || true
           git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main || true
+      # - name: Commit results
+      #   run: |
+      #     git config --global user.name "GitHub Actions"
+      #     git config --global user.email "actions@github.com"
+      #     git add results.json
+      #     git commit -m "Auto: Results for ${{ inputs.student_id }} [skip ci]" || echo "No changes to commit"
+      #     git pull --rebase origin main || true
+      #     git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main || true
 
       # 5. 上传到 Google Sheets（可选）
       - name: Upload to Google Sheets
